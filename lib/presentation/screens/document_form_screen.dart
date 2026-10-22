@@ -71,15 +71,16 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
 
   Future<void> _pickFiles() async {
     try {
-      final files = await FilePicker.pickFiles(
+      final result = await FilePicker.platform.pickFiles(
         type: FileType.any,
+        allowMultiple: true,
       );
-      if (files.isNotEmpty) {
+      if (result != null && result.files.isNotEmpty) {
         final List<AttachmentEntity> newAttachments = [];
-        for (final f in files) {
+        for (final f in result.files) {
           final fileName = f.name;
           final ext = f.extension ?? (fileName.contains('.') ? fileName.split('.').last : 'dat');
-          final size = f.lengthSync() ?? (await f.length()) ?? 0;
+          final size = f.size;
           newAttachments.add(
             AttachmentEntity(
               attachmentPk: UuidHelper.generate(),
@@ -98,7 +99,7 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Đã đính kèm ${files.length} tệp thành công!'),
+              content: Text('Đã đính kèm ${result.files.length} tệp thành công!'),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -142,7 +143,7 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                initialValue: selectedExt,
+                value: selectedExt,
                 decoration: const InputDecoration(
                   labelText: 'Định dạng tệp',
                   border: OutlineInputBorder(),
@@ -345,7 +346,7 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
                     // Chọn môn học
                     DropdownButtonFormField<String>(
                       isExpanded: true,
-                      initialValue: _selectedSubjectFk,
+                      value: _selectedSubjectFk,
                       decoration: const InputDecoration(
                         labelText: 'Môn học *',
                         border: OutlineInputBorder(),
@@ -367,7 +368,7 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
                     // Loại tài liệu
                     DropdownButtonFormField<String>(
                       isExpanded: true,
-                      initialValue: _selectedType,
+                      value: _selectedType,
                       decoration: const InputDecoration(
                         labelText: 'Phân loại tài liệu',
                         border: OutlineInputBorder(),
@@ -386,7 +387,7 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
                     // Trạng thái học tập
                     DropdownButtonFormField<String>(
                       isExpanded: true,
-                      initialValue: _selectedStatus,
+                      value: _selectedStatus,
                       decoration: const InputDecoration(
                         labelText: 'Trạng thái học tập',
                         border: OutlineInputBorder(),
@@ -511,7 +512,7 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
                                 shrinkWrap: true,
                                 physics: const NeverScrollableScrollPhysics(),
                                 itemCount: _attachments.length,
-                                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                                separatorBuilder: (_, __) => const SizedBox(height: 8),
                                 itemBuilder: (ctx, idx) {
                                   final att = _attachments[idx];
                                   return Container(

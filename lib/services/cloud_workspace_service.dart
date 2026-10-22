@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -120,17 +121,21 @@ class CloudWorkspaceService {
       );
     }
 
-    final fileSize = file.lengthSync() ?? await file.length();
-    if (fileSize == null) {
-      throw const CloudOperationException('Không thể xác định kích thước tệp.');
-    }
+    final fileSize = file.size;
     if (fileSize <= 0 || fileSize > maxFileSizeBytes) {
       throw const CloudOperationException(
         'Tệp phải có dung lượng lớn hơn 0 và không vượt quá 25 MB.',
       );
     }
 
-    final bytes = await file.readAsBytes();
+    final Uint8List bytes;
+    if (file.bytes != null) {
+      bytes = file.bytes!;
+    } else if (file.path != null) {
+      bytes = await File(file.path!).readAsBytes();
+    } else {
+      throw const CloudOperationException('Không thể đọc dữ liệu tệp.');
+    }
     if (bytes.length != fileSize) {
       throw const CloudOperationException(
         'Dữ liệu tệp đọc được không khớp kích thước ban đầu.',
@@ -223,11 +228,10 @@ class CloudWorkspaceService {
       throw const CloudOperationException('Không đọc được dữ liệu tệp.');
     }
 
-    final savedFile = await FilePicker.saveFile(
+    final savedFile = await FilePicker.platform.saveFile(
       dialogTitle: 'Lưu tài liệu',
       fileName: document.fileName,
       bytes: Uint8List.fromList(bytes),
-      mimeType: document.mimeType,
     );
     return savedFile != null;
   }

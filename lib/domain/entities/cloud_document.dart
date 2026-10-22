@@ -33,6 +33,13 @@ class CloudDocument {
     required this.createdAt,
     required this.updatedAt,
     required this.accessLevel,
+    this.storageRoom,
+    this.shelfCode,
+    this.boxNumber,
+    this.latitude,
+    this.longitude,
+    this.address,
+    this.tags = const [],
   });
 
   final String id;
@@ -46,6 +53,13 @@ class CloudDocument {
   final DateTime createdAt;
   final DateTime updatedAt;
   final CloudAccessLevel accessLevel;
+  final String? storageRoom;
+  final String? shelfCode;
+  final String? boxNumber;
+  final double? latitude;
+  final double? longitude;
+  final String? address;
+  final List<String> tags;
 
   bool get canEdit =>
       accessLevel == CloudAccessLevel.owner ||
@@ -72,6 +86,13 @@ class CloudDocument {
       accessLevel: ownerId == currentUserId
           ? CloudAccessLevel.owner
           : CloudAccessLevelX.fromDatabase(grantedAccess),
+      storageRoom: map['storage_room'] as String?,
+      shelfCode: map['shelf_code'] as String?,
+      boxNumber: map['box_number'] as String?,
+      latitude: (map['latitude'] as num?)?.toDouble(),
+      longitude: (map['longitude'] as num?)?.toDouble(),
+      address: map['address'] as String?,
+      tags: (map['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
     );
   }
 }

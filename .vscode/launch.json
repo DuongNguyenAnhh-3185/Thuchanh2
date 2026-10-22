@@ -1,0 +1,37 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "CashewDoc (Chrome Web)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "-d",
+        "chrome",
+        "--web-port=7357",
+        "--dart-define-from-file=.env.json"
+      ]
+    },
+    {
+      "name": "CashewDoc (Edge Web)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "-d",
+        "edge",
+        "--web-port=7357",
+        "--dart-define-from-file=.env.json"
+      ]
+    },
+    {
+      "name": "CashewDoc (Windows Desktop)",
+      "request": "launch",
+      "type": "dart",
+      "args": [
+        "-d",
+        "windows",
+        "--dart-define-from-file=.env.json"
+      ]
+    }
+  ]
+}

@@ -406,7 +406,7 @@ class _FirebaseCloudScreenState extends State<FirebaseCloudScreen> {
                   child: ListView.separated(
                     padding: const EdgeInsets.only(bottom: 88),
                     itemCount: _documents.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (_, index) => _DocumentTile(
                       document: _documents[index],
                       disabled: _busy,
@@ -665,13 +665,14 @@ class _UploadDocumentDialogState extends State<_UploadDocumentDialog> {
 
   Future<void> _pickFile() async {
     try {
-      final file = await FilePicker.pickFile(type: FileType.any);
+      final result = await FilePicker.platform.pickFiles(type: FileType.any);
+      final file = result?.files.singleOrNull;
       if (file == null || !mounted) return;
-      final size = file.lengthSync() ?? await file.length();
+      final size = file.size;
       if (!mounted) return;
       setState(() {
         _file = file;
-        _error = size != null && size > CloudWorkspaceService.maxFileSizeBytes
+        _error = size > CloudWorkspaceService.maxFileSizeBytes
             ? 'Tệp vượt quá giới hạn 25 MB.'
             : null;
         if (_title.text.trim().isEmpty) {
@@ -939,7 +940,7 @@ class _ShareDocumentDialogState extends State<_ShareDocumentDialog> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<CloudAccessLevel>(
-                initialValue: _level,
+                value: _level,
                 decoration: const InputDecoration(
                   labelText: 'Quyền truy cập',
                   border: OutlineInputBorder(),
