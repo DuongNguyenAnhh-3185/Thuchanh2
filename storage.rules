@@ -1,0 +1,39 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(ownerUid) {
+      return signedIn() && request.auth.uid == ownerUid;
+    }
+
+    function hasReadAcl(ownerUid, documentId) {
+      return signedIn()
+        && firestore.get(
+          /databases/(default)/documents/storage_acl/$(documentId)
+        ).data.owner_uid == ownerUid
+        && firestore.exists(
+          /databases/(default)/documents/storage_acl/$(documentId)/readers/$(request.auth.uid)
+        );
+    }
+
+    match /documents/{ownerUid}/{documentId}/{fileName} {
+      allow read: if isOwner(ownerUid) || hasReadAcl(ownerUid, documentId);
+      allow create: if isOwner(ownerUid)
+        && request.resource.size > 0
+        && request.resource.size <= 25 * 1024 * 1024
+        && request.resource.metadata.ownerUid == request.auth.uid
+        && request.resource.metadata.documentId == documentId;
+      // Physical objects are immutable; editors only update SQL metadata.
+      allow update: if false;
+      allow delete: if isOwner(ownerUid);
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

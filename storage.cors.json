@@ -1,0 +1,18 @@
+[
+  {
+    "origin": [
+      "http://localhost:7357",
+      "http://127.0.0.1:7357"
+    ],
+    "method": [
+      "GET",
+      "HEAD"
+    ],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Length",
+      "Content-Disposition"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]
