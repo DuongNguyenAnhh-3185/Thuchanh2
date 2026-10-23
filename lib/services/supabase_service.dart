@@ -22,12 +22,17 @@ class SupabaseService {
     return Supabase.instance.client;
   }
 
-  static Future<void> initialize() async {
-    if (_initialized || !isConfigured) return;
+  static Future<void> initialize({String? url, String? publishableKey}) async {
+    if (_initialized) return;
+
+    final targetUrl = url ?? SupabaseConfig.url;
+    final targetKey = publishableKey ?? SupabaseConfig.publishableKey;
+
+    if (!targetUrl.startsWith('https://') || targetKey.trim().isEmpty) return;
 
     await Supabase.initialize(
-      url: SupabaseConfig.url,
-      publishableKey: SupabaseConfig.publishableKey,
+      url: targetUrl,
+      publishableKey: targetKey,
       accessToken: () async {
         return FirebaseAuth.instance.currentUser?.getIdToken(false);
       },

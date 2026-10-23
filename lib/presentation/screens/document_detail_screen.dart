@@ -281,7 +281,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         itemCount: doc.attachments.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 10),
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
                         itemBuilder: (ctx, idx) {
                           final att = doc.attachments[idx];
                           return InkWell(

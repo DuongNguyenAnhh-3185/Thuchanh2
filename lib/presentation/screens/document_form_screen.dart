@@ -27,6 +27,11 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _noteController;
   late final TextEditingController _tagsController;
+  late final TextEditingController _roomController;
+  late final TextEditingController _shelfController;
+  late final TextEditingController _boxController;
+  late final TextEditingController _latController;
+  late final TextEditingController _lngController;
 
   String? _selectedSubjectFk;
   String _selectedType = AppConstants.documentTypes.first;
@@ -43,6 +48,11 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
     _titleController = TextEditingController(text: doc?.title ?? '');
     _noteController = TextEditingController(text: doc?.note ?? '');
     _tagsController = TextEditingController(text: doc?.tags ?? '');
+    _roomController = TextEditingController(text: 'Phòng A1');
+    _shelfController = TextEditingController(text: 'Kệ B2');
+    _boxController = TextEditingController(text: 'Hộp 01');
+    _latController = TextEditingController(text: '21.0285');
+    _lngController = TextEditingController(text: '105.8542');
     _selectedSubjectFk = doc?.subjectFk;
     if (doc != null) {
       _selectedType = doc.documentType;
@@ -69,20 +79,26 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
     _titleController.dispose();
     _noteController.dispose();
     _tagsController.dispose();
+    _roomController.dispose();
+    _shelfController.dispose();
+    _boxController.dispose();
+    _latController.dispose();
+    _lngController.dispose();
     super.dispose();
   }
 
   Future<void> _pickFiles() async {
     try {
-      final files = await FilePicker.pickFiles(type: FileType.any);
-      if (files.isNotEmpty) {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: true,
+      );
+      if (result != null && result.files.isNotEmpty) {
         final List<AttachmentEntity> newAttachments = [];
-        for (final f in files) {
+        for (final f in result.files) {
           final fileName = f.name;
-          final ext =
-              f.extension ??
-              (fileName.contains('.') ? fileName.split('.').last : 'dat');
-          final size = f.lengthSync() ?? (await f.length()) ?? 0;
+          final ext = f.extension ?? (fileName.contains('.') ? fileName.split('.').last : 'dat');
+          final size = f.size;
           newAttachments.add(
             AttachmentEntity(
               attachmentPk: UuidHelper.generate(),
@@ -101,7 +117,7 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Đã đính kèm ${files.length} tệp thành công!'),
+              content: Text('Đã đính kèm ${result.files.length} tệp thành công!'),
               behavior: SnackBarBehavior.floating,
             ),
           );
@@ -308,12 +324,24 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
     }
 
     try {
+      final room = _roomController.text.trim();
+      final shelf = _shelfController.text.trim();
+      final box = _boxController.text.trim();
+      final lat = _latController.text.trim().isNotEmpty ? _latController.text.trim() : '21.0285';
+      final lng = _lngController.text.trim().isNotEmpty ? _lngController.text.trim() : '105.8542';
+
+      var noteText = _noteController.text.trim();
+      final locMarker = '📍 Vị trí: $room - $shelf - $box (GPS: $lat, $lng)';
+      if (!noteText.contains('📍 Vị trí:')) {
+        noteText = noteText.isEmpty ? locMarker : '$noteText\n$locMarker';
+      }
+
       await ServiceLocator.instance.documentService.saveDocument(
         documentPk: widget.initialDocument?.documentPk,
         subjectFk: _selectedSubjectFk!,
         title: _titleController.text.trim(),
         documentType: _selectedType,
-        note: _noteController.text.trim(),
+        note: noteText,
         studyStatus: _selectedStatus,
         priority: _priority,
         tags: _tagsController.text.trim(),
@@ -462,7 +490,136 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 20),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // ==========================================
+                    // KHỐI VỊ TRÍ VẬT LÝ & TỌA ĐỘ BẢN ĐỒ GPS
+                    // ==========================================
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.indigo.shade50.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.indigo.shade100),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.location_on, color: Colors.indigo, size: 20),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                  'Vị trí lưu kho vật lý & Tọa độ Bản đồ',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: Colors.indigo,
+                                  ),
+                                ),
+                              ),
+                              TextButton.icon(
+                                onPressed: () {
+                                  setState(() {
+                                    _roomController.text = 'Phòng A1';
+                                    _shelfController.text = 'Kệ B2';
+                                    _boxController.text = 'Hộp 01';
+                                    _latController.text = '21.0285';
+                                    _lngController.text = '105.8542';
+                                  });
+                                },
+                                icon: const Icon(Icons.gps_fixed, size: 14),
+                                label: const Text('Mặc định HN', style: TextStyle(fontSize: 11)),
+                                style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _roomController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Phòng lưu trữ',
+                                    hintText: 'VD: Phòng A1',
+                                    border: OutlineInputBorder(),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    prefixIcon: Icon(Icons.meeting_room_outlined),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _shelfController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Mã kệ',
+                                    hintText: 'VD: Kệ B2',
+                                    border: OutlineInputBorder(),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    prefixIcon: Icon(Icons.shelves),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _boxController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Số hộp',
+                                    hintText: 'VD: Hộp 01',
+                                    border: OutlineInputBorder(),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    prefixIcon: Icon(Icons.all_inbox_outlined),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _latController,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Vĩ độ (Lat)',
+                                    hintText: '21.0285',
+                                    border: OutlineInputBorder(),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    prefixIcon: Icon(Icons.explore_outlined),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _lngController,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Kinh độ (Lng)',
+                                    hintText: '105.8542',
+                                    border: OutlineInputBorder(),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    prefixIcon: Icon(Icons.explore_outlined),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
 
                       // ==========================================
                       // KHỐI QUẢN LÝ TỆP ĐÍNH KÈM (ATTACHMENTS)
@@ -492,6 +649,61 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
                                         color: AppConstants.primaryColor,
                                         size: 20,
                                       ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    IconButton(
+                                      icon: const Icon(Icons.add_circle_outline, color: AppConstants.primaryColor, size: 22),
+                                      tooltip: 'Tạo tệp mẫu nhanh',
+                                      onPressed: _addCustomAttachmentDialog,
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            if (_attachments.isEmpty)
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.symmetric(vertical: 20),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: Colors.grey.withAlpha(60), style: BorderStyle.solid),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Icon(Icons.upload_file, size: 36, color: Colors.grey[400]),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'Chưa có tệp đính kèm nào',
+                                      style: TextStyle(fontSize: 13, color: Colors.grey[600], fontWeight: FontWeight.w500),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      'Bấm "Chọn tệp" để tải từ máy hoặc "+" để thêm tệp nhanh',
+                                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else
+                              ListView.separated(
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: _attachments.length,
+                                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                                itemBuilder: (ctx, idx) {
+                                  final att = _attachments[idx];
+                                  return Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(10),
+                                      border: Border.all(color: Colors.grey.withAlpha(40)),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withAlpha(8),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 1),
                                       const SizedBox(width: 6),
                                       Text(
                                         'Tệp đính kèm (${_attachments.length})',
