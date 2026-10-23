@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/date_helper.dart';
 import '../../domain/entities/document_entity.dart';
 import '../../service_locator.dart';
 import '../widgets/status_badge.dart';
+import '../widgets/location_map_button.dart';
 import 'document_form_screen.dart';
 
 /// Màn hình Chi tiết tài liệu học tập
@@ -28,7 +30,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
 
   Future<void> _loadDocument() async {
     setState(() => _isLoading = true);
-    final doc = await ServiceLocator.instance.documentService.getDocumentById(widget.documentPk);
+    final doc = await ServiceLocator.instance.documentService.getDocumentById(
+      widget.documentPk,
+    );
     setState(() {
       _document = doc;
       _isLoading = false;
@@ -59,7 +63,10 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
       nextStatus = AppConstants.statusNotStarted;
     }
 
-    await ServiceLocator.instance.documentService.updateStudyStatus(_document!.documentPk, nextStatus);
+    await ServiceLocator.instance.documentService.updateStudyStatus(
+      _document!.documentPk,
+      nextStatus,
+    );
     _loadDocument();
   }
 
@@ -75,7 +82,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
     if (_document == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Không tìm thấy')),
-        body: const Center(child: Text('Tài liệu không tồn tại hoặc đã bị xóa')),
+        body: const Center(
+          child: Text('Tài liệu không tồn tại hoặc đã bị xóa'),
+        ),
       );
     }
 
@@ -116,7 +125,10 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFDBEAFE),
                             borderRadius: BorderRadius.circular(8),
@@ -134,7 +146,10 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                         Expanded(
                           child: Text(
                             doc.subject?.name ?? '',
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -156,18 +171,32 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(Icons.category_outlined, size: 16, color: Colors.grey[600]),
+                        Icon(
+                          Icons.category_outlined,
+                          size: 16,
+                          color: Colors.grey[600],
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           doc.documentType,
-                          style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[700],
+                          ),
                         ),
                         const SizedBox(width: 16),
-                        Icon(Icons.access_time, size: 16, color: Colors.grey[600]),
+                        Icon(
+                          Icons.access_time,
+                          size: 16,
+                          color: Colors.grey[600],
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           DateHelper.formatTimestamp(doc.dateTimeModified),
-                          style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey[700],
+                          ),
                         ),
                       ],
                     ),
@@ -176,6 +205,27 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
               ),
             ),
             const SizedBox(height: 16),
+
+            if (doc.physicalLocation.isNotEmpty ||
+                (doc.latitude != null && doc.longitude != null))
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.place_outlined),
+                  title: Text(
+                    doc.physicalLocation.isEmpty
+                        ? 'Vị trí trên bản đồ'
+                        : doc.physicalLocation,
+                  ),
+                  subtitle: doc.latitude != null && doc.longitude != null
+                      ? Text('${doc.latitude}, ${doc.longitude}')
+                      : null,
+                  trailing: LocationMapButton(
+                    location: doc.physicalLocation,
+                    latitude: doc.latitude,
+                    longitude: doc.longitude,
+                  ),
+                ),
+              ),
 
             // Card Ghi chú & Thẻ
             Card(
@@ -192,12 +242,22 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                   children: [
                     const Text(
                       'Ghi chú & Tóm tắt',
-                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1E293B),
+                      ),
                     ),
                     const Divider(height: 20),
                     Text(
-                      doc.note.isNotEmpty ? doc.note : 'Chưa có ghi chú cho tài liệu này.',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[800], height: 1.4),
+                      doc.note.isNotEmpty
+                          ? doc.note
+                          : 'Chưa có ghi chú cho tài liệu này.',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[800],
+                        height: 1.4,
+                      ),
                     ),
                     if (doc.tags.isNotEmpty) ...[
                       const SizedBox(height: 16),
@@ -208,14 +268,20 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                           final tagText = t.trim();
                           if (tagText.isEmpty) return const SizedBox.shrink();
                           return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFF1F5F9),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             child: Text(
                               '#$tagText',
-                              style: const TextStyle(fontSize: 12, color: Color(0xFF475569)),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Color(0xFF475569),
+                              ),
                             ),
                           );
                         }).toList(),
@@ -245,7 +311,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.attach_file, color: AppConstants.primaryColor, size: 20),
+                            const Icon(
+                              Icons.attach_file,
+                              color: AppConstants.primaryColor,
+                              size: 20,
+                            ),
                             const SizedBox(width: 6),
                             Text(
                               'Tệp đính kèm (${doc.attachments.length})',
@@ -260,7 +330,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                         if (doc.attachments.isNotEmpty)
                           Text(
                             'Chạm để mở',
-                            style: TextStyle(fontSize: 12, color: Colors.grey[500], fontStyle: FontStyle.italic),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[500],
+                              fontStyle: FontStyle.italic,
+                            ),
                           ),
                       ],
                     ),
@@ -272,7 +346,10 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                           child: Text(
                             'Chưa có tệp đính kèm cho tài liệu này.\nBấm biểu tượng Sửa (góc trên) để tải tệp lên.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.grey[500],
+                            ),
                           ),
                         ),
                       )
@@ -290,7 +367,11 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                                 SnackBar(
                                   content: Row(
                                     children: [
-                                      const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                                      const Icon(
+                                        Icons.check_circle,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
                                       const SizedBox(width: 8),
                                       Expanded(
                                         child: Text(
@@ -311,7 +392,9 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                               decoration: BoxDecoration(
                                 color: const Color(0xFFF8FAFC),
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: Colors.grey.withAlpha(50)),
+                                border: Border.all(
+                                  color: Colors.grey.withAlpha(50),
+                                ),
                               ),
                               child: Row(
                                 children: [
@@ -319,7 +402,8 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           att.fileName,
@@ -335,10 +419,17 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                                         Row(
                                           children: [
                                             Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 6,
+                                                    vertical: 1,
+                                                  ),
                                               decoration: BoxDecoration(
-                                                color: Colors.blue.withAlpha(20),
-                                                borderRadius: BorderRadius.circular(4),
+                                                color: Colors.blue.withAlpha(
+                                                  20,
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(4),
                                               ),
                                               child: Text(
                                                 att.fileExtension.toUpperCase(),
@@ -351,15 +442,24 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
-                                              DateHelper.formatFileSize(att.fileSizeBytes),
-                                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                              DateHelper.formatFileSize(
+                                                att.fileSizeBytes,
+                                              ),
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey[600],
+                                              ),
                                             ),
                                           ],
                                         ),
                                       ],
                                     ),
                                   ),
-                                  const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                                  const Icon(
+                                    Icons.arrow_forward_ios,
+                                    size: 14,
+                                    color: Colors.grey,
+                                  ),
                                 ],
                               ),
                             ),

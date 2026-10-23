@@ -68,15 +68,18 @@ class SupabaseDocumentService {
     String tags = '',
     int priority = 2,
   }) async {
-    await _client.from('cloud_documents').update({
-      'title': title,
-      'document_type': documentType,
-      'study_status': studyStatus,
-      'note': note,
-      'tags': tags,
-      'priority': priority,
-      'updated_at': DateTime.now().toIso8601String(),
-    }).eq('id', id);
+    await _client
+        .from('cloud_documents')
+        .update({
+          'title': title,
+          'document_type': documentType,
+          'study_status': studyStatus,
+          'note': note,
+          'tags': tags,
+          'priority': priority,
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', id);
   }
 
   /// Xóa tài liệu trên Supabase theo id
@@ -104,15 +107,18 @@ class SupabaseDocumentService {
         .maybeSingle();
 
     if (existing != null) {
-      await _client.from('cloud_documents').update({
-        'title': title,
-        'document_type': documentType,
-        'study_status': studyStatus,
-        'note': note,
-        'tags': tags,
-        'priority': priority,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('local_id', localId);
+      await _client
+          .from('cloud_documents')
+          .update({
+            'title': title,
+            'document_type': documentType,
+            'study_status': studyStatus,
+            'note': note,
+            'tags': tags,
+            'priority': priority,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('local_id', localId);
     } else {
       await _client.from('cloud_documents').insert({
         'local_id': localId,
@@ -140,4 +146,3 @@ class SupabaseDocumentService {
     }
   }
 }
-

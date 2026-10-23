@@ -1,11 +1,13 @@
 # 📚 CashewDoc - Ứng Dụng Quản Lý Tài Liệu Học Tập (Kiến Trúc Cashew)
 
-> Hướng dẫn triển khai Firebase Auth/Storage, Supabase và RLS: [CLOUD_SETUP.md](CLOUD_SETUP.md)
+> Trạng thái TH2, đối chiếu yêu cầu, kết quả kiểm tra và các bước Cloud còn lại: [TH2_STATUS.md](TH2_STATUS.md)
+
+> Hướng dẫn triển khai Firebase Auth/Messaging, Supabase Database/Storage và RLS: [CLOUD_SETUP.md](CLOUD_SETUP.md)
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-blue.svg)](https://flutter.dev)
 [![Architecture](https://img.shields.io/badge/Architecture-Cashew%20Clean%20Architecture-brightgreen.svg)](#kiến-trúc-cashew)
-[![Tests](https://img.shields.io/badge/Tests-33%2F33%20Passed-success.svg)](#kiểm-thử-chất-lượng)
-[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows-lightgrey.svg)](#đóng-gói-ứng-dụng)
+[![Tests](https://img.shields.io/badge/Tests-41%20Passed-success.svg)](#kiểm-thử-chất-lượng)
+[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Web-lightgrey.svg)](#đóng-gói-ứng-dụng)
 
 Dự án thực hành môn **Lập trình Thiết bị Di động** - Xây dựng ứng dụng quản lý tài liệu học tập cá nhân theo chuẩn **kiến trúc phần mềm mã nguồn mở Cashew** (Clean Architecture, Offline-First, Reactive Stream, Soft-Delete & Độc lập Tầng).
 
@@ -120,8 +122,7 @@ Tệp tin đóng gói được tạo tại:
 ## 🚀 Hướng Dẫn Cài Đặt & Chạy Dự Án
 
 ### Yêu Cầu Môi Trường:
-- Flutter SDK >= 3.0.0
-- Dart SDK >= 3.0.0
+- Flutter SDK tương thích Dart >= 3.13.2
 - Android SDK (API 34/35) & Android Studio
 
 ### Các Bước Thực Hiện:
@@ -134,10 +135,25 @@ Tệp tin đóng gói được tạo tại:
    ```bash
    flutter pub get
    ```
-3. **Chạy ứng dụng trên Thiết bị thật hoặc Giả lập (Emulator)**:
+3. **Chạy ứng dụng cục bộ trên Chrome** (không cần cấu hình Cloud):
    ```bash
-   flutter run
+   flutter run -d chrome
    ```
+   Trên Windows có thể chạy `run.bat`; mặc định khởi động local trên Chrome.
+4. **Bật không gian Cloud**: cấu hình Firebase và Supabase theo
+   [CLOUD_SETUP.md](CLOUD_SETUP.md), sau đó truyền `SUPABASE_URL` và
+   `SUPABASE_PUBLISHABLE_KEY` bằng `--dart-define`. Web push cần thêm
+   `FCM_WEB_VAPID_KEY`.
+
+## 🏷️ Vị trí, gợi ý và mượn tài liệu
+
+- Gắn nhiều tag cho tài liệu, lọc danh sách theo tag và mở vị trí (địa chỉ hoặc
+  tọa độ) trên OpenStreetMap.
+- Gợi ý tài liệu chưa hoàn thành dựa trên tag và môn học của các tài liệu đã
+  hoàn thành.
+- Trong Cloud, chủ sở hữu có thể mở tài liệu cho mượn; người dùng gửi yêu cầu,
+  chủ sở hữu chấp nhận để cấp quyền xem/tải hoặc từ chối. Cần triển khai
+  migration Supabase và Edge Function theo [CLOUD_SETUP.md](CLOUD_SETUP.md).
 
 ---
 

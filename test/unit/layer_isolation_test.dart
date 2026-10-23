@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:study_doc_manager/core/constants/app_constants.dart';
 import 'package:study_doc_manager/core/utils/uuid_helper.dart';
@@ -26,11 +27,15 @@ class FakeDocumentRepository implements IDocumentRepository {
       StreamController<List<DocumentEntity>>.broadcast();
 
   void _notify() {
-    _streamController.add(List.unmodifiable(_storage.where((d) => !d.isDeleted)));
+    _streamController.add(
+      List.unmodifiable(_storage.where((d) => !d.isDeleted)),
+    );
   }
 
   @override
-  Future<List<DocumentEntity>> getAllDocuments({bool includeDeleted = false}) async {
+  Future<List<DocumentEntity>> getAllDocuments({
+    bool includeDeleted = false,
+  }) async {
     if (includeDeleted) {
       return List.from(_storage);
     }
@@ -38,7 +43,9 @@ class FakeDocumentRepository implements IDocumentRepository {
   }
 
   @override
-  Stream<List<DocumentEntity>> watchAllDocuments({bool includeDeleted = false}) {
+  Stream<List<DocumentEntity>> watchAllDocuments({
+    bool includeDeleted = false,
+  }) {
     // Phát ngay giá trị hiện tại
     Future.microtask(() => _notify());
     return _streamController.stream;
@@ -55,7 +62,9 @@ class FakeDocumentRepository implements IDocumentRepository {
 
   @override
   Future<List<DocumentEntity>> getDocumentsBySubject(String subjectFk) async {
-    return _storage.where((d) => d.subjectFk == subjectFk && !d.isDeleted).toList();
+    return _storage
+        .where((d) => d.subjectFk == subjectFk && !d.isDeleted)
+        .toList();
   }
 
   @override
@@ -106,13 +115,19 @@ class FakeDocumentRepository implements IDocumentRepository {
   }) async {
     return _storage.where((doc) {
       if (doc.isDeleted) return false;
-      if (subjectFk != null && subjectFk.isNotEmpty && doc.subjectFk != subjectFk) {
+      if (subjectFk != null &&
+          subjectFk.isNotEmpty &&
+          doc.subjectFk != subjectFk) {
         return false;
       }
-      if (documentType != null && documentType.isNotEmpty && doc.documentType != documentType) {
+      if (documentType != null &&
+          documentType.isNotEmpty &&
+          doc.documentType != documentType) {
         return false;
       }
-      if (studyStatus != null && studyStatus.isNotEmpty && doc.studyStatus != studyStatus) {
+      if (studyStatus != null &&
+          studyStatus.isNotEmpty &&
+          doc.studyStatus != studyStatus) {
         return false;
       }
       if (query != null && query.trim().isNotEmpty) {
@@ -265,68 +280,83 @@ void main() {
       expect(subject.instructor, contains('Nguyễn Văn A'));
     });
 
-    test('TC-ISO-03: AttachmentEntity lưu trữ đầy đủ thuộc tính tệp và khóa ngoại', () {
-      final att = AttachmentEntity(
-        attachmentPk: 'att-001',
-        documentFk: 'doc-001',
-        fileName: 'Bai_giang_Clean_Arch.pdf',
-        fileExtension: 'pdf',
-        localPath: '/data/user/0/com.example/files/Bai_giang_Clean_Arch.pdf',
-        fileSizeBytes: 2621440, // 2.5 MB
-        dateTimeCreated: 1727930000,
-      );
+    test(
+      'TC-ISO-03: AttachmentEntity lưu trữ đầy đủ thuộc tính tệp và khóa ngoại',
+      () {
+        final att = AttachmentEntity(
+          attachmentPk: 'att-001',
+          documentFk: 'doc-001',
+          fileName: 'Bai_giang_Clean_Arch.pdf',
+          fileExtension: 'pdf',
+          localPath: '/data/user/0/com.example/files/Bai_giang_Clean_Arch.pdf',
+          fileSizeBytes: 2621440, // 2.5 MB
+          dateTimeCreated: 1727930000,
+        );
 
-      expect(att.fileExtension, equals('pdf'));
-      expect(att.documentFk, equals('doc-001'));
-      expect(att.fileSizeBytes, equals(2621440));
-    });
+        expect(att.fileExtension, equals('pdf'));
+        expect(att.documentFk, equals('doc-001'));
+        expect(att.fileSizeBytes, equals(2621440));
+      },
+    );
   });
 
   group('NHÓM 2: KIỂM THỬ CÔ LẬP TẦNG DỊCH VỤ VỚI FAKE REPOSITORY (SERVICE LAYER ISOLATION)', () {
-    test('TC-ISO-04: DocumentService validation bắt buộc tiêu đề rỗng', () async {
-      expect(
-        () => docService.saveDocument(
-          subjectFk: 'sub-001',
-          title: '   ',
-          documentType: AppConstants.typeLecture,
-        ),
-        throwsA(isA<ArgumentError>().having(
-          (e) => e.message,
-          'message',
-          contains('Tiêu đề tài liệu không được để trống'),
-        )),
-      );
-    });
+    test(
+      'TC-ISO-04: DocumentService validation bắt buộc tiêu đề rỗng',
+      () async {
+        expect(
+          () => docService.saveDocument(
+            subjectFk: 'sub-001',
+            title: '   ',
+            documentType: AppConstants.typeLecture,
+          ),
+          throwsA(
+            isA<ArgumentError>().having(
+              (e) => e.message,
+              'message',
+              contains('Tiêu đề tài liệu không được để trống'),
+            ),
+          ),
+        );
+      },
+    );
 
-    test('TC-ISO-05: DocumentService validation bắt buộc môn học và loại tài liệu', () async {
-      // Thiếu môn học
-      expect(
-        () => docService.saveDocument(
-          subjectFk: '',
-          title: 'Đề thi cuối kỳ',
-          documentType: AppConstants.typeExam,
-        ),
-        throwsA(isA<ArgumentError>().having(
-          (e) => e.message,
-          'message',
-          contains('Vui lòng chọn môn học'),
-        )),
-      );
+    test(
+      'TC-ISO-05: DocumentService validation bắt buộc môn học và loại tài liệu',
+      () async {
+        // Thiếu môn học
+        expect(
+          () => docService.saveDocument(
+            subjectFk: '',
+            title: 'Đề thi cuối kỳ',
+            documentType: AppConstants.typeExam,
+          ),
+          throwsA(
+            isA<ArgumentError>().having(
+              (e) => e.message,
+              'message',
+              contains('Vui lòng chọn môn học'),
+            ),
+          ),
+        );
 
-      // Loại tài liệu không hợp lệ
-      expect(
-        () => docService.saveDocument(
-          subjectFk: 'sub-001',
-          title: 'Đề thi cuối kỳ',
-          documentType: 'Loại Không Tồn Tại',
-        ),
-        throwsA(isA<ArgumentError>().having(
-          (e) => e.message,
-          'message',
-          contains('Loại tài liệu không hợp lệ'),
-        )),
-      );
-    });
+        // Loại tài liệu không hợp lệ
+        expect(
+          () => docService.saveDocument(
+            subjectFk: 'sub-001',
+            title: 'Đề thi cuối kỳ',
+            documentType: 'Loại Không Tồn Tại',
+          ),
+          throwsA(
+            isA<ArgumentError>().having(
+              (e) => e.message,
+              'message',
+              contains('Loại tài liệu không hợp lệ'),
+            ),
+          ),
+        );
+      },
+    );
 
     test('TC-ISO-06: DocumentService tự động sinh UUID v4 và thời gian timestamps khi thêm mới', () async {
       final doc = await docService.saveDocument(
@@ -356,12 +386,18 @@ void main() {
       );
 
       // Chuyển sang Đang học
-      await docService.updateStudyStatus(doc.documentPk, AppConstants.statusInProgress);
+      await docService.updateStudyStatus(
+        doc.documentPk,
+        AppConstants.statusInProgress,
+      );
       var fetched = await docService.getDocumentById(doc.documentPk);
       expect(fetched!.studyStatus, equals(AppConstants.statusInProgress));
 
       // Chuyển sang Đã hoàn thành
-      await docService.updateStudyStatus(doc.documentPk, AppConstants.statusCompleted);
+      await docService.updateStudyStatus(
+        doc.documentPk,
+        AppConstants.statusCompleted,
+      );
       fetched = await docService.getDocumentById(doc.documentPk);
       expect(fetched!.studyStatus, equals(AppConstants.statusCompleted));
     });
@@ -390,82 +426,98 @@ void main() {
       expect(allDocs.first.isDeleted, isTrue);
     });
 
-    test('TC-ISO-09: DocumentService khôi phục tài liệu từ trạng thái xóa mềm', () async {
-      final doc = await docService.saveDocument(
-        subjectFk: 'sub-001',
-        title: 'Tài liệu Khôi phục',
-        documentType: AppConstants.typeExam,
-      );
+    test(
+      'TC-ISO-09: DocumentService khôi phục tài liệu từ trạng thái xóa mềm',
+      () async {
+        final doc = await docService.saveDocument(
+          subjectFk: 'sub-001',
+          title: 'Tài liệu Khôi phục',
+          documentType: AppConstants.typeExam,
+        );
 
-      await docService.softDeleteDocument(doc.documentPk);
-      expect((await docService.getAllDocuments(includeDeleted: false)).isEmpty, isTrue);
+        await docService.softDeleteDocument(doc.documentPk);
+        expect(
+          (await docService.getAllDocuments(includeDeleted: false)).isEmpty,
+          isTrue,
+        );
 
-      // Khôi phục
-      await docService.restoreDocument(doc.documentPk);
-      final activeDocs = await docService.getAllDocuments(includeDeleted: false);
-      expect(activeDocs.length, equals(1));
-      expect(activeDocs.first.isDeleted, isFalse);
-    });
+        // Khôi phục
+        await docService.restoreDocument(doc.documentPk);
+        final activeDocs = await docService.getAllDocuments(
+          includeDeleted: false,
+        );
+        expect(activeDocs.length, equals(1));
+        expect(activeDocs.first.isDeleted, isFalse);
+      },
+    );
 
-    test('TC-ISO-10: SearchService tìm kiếm Full-Text độc lập với SQLite FTS', () async {
-      await docService.saveDocument(
-        subjectFk: 'sub-001',
-        title: 'Lập trình Flutter nâng cao với Bloc và Cashew',
-        documentType: AppConstants.typeLecture,
-        tags: 'dart, flutter, state',
-      );
-      await docService.saveDocument(
-        subjectFk: 'sub-002',
-        title: 'Cơ sở Dữ liệu Phân tán MongoDB',
-        documentType: AppConstants.typeLecture,
-        tags: 'nosql, database',
-      );
+    test(
+      'TC-ISO-10: SearchService tìm kiếm Full-Text độc lập với SQLite FTS',
+      () async {
+        await docService.saveDocument(
+          subjectFk: 'sub-001',
+          title: 'Lập trình Flutter nâng cao với Bloc và Cashew',
+          documentType: AppConstants.typeLecture,
+          tags: 'dart, flutter, state',
+        );
+        await docService.saveDocument(
+          subjectFk: 'sub-002',
+          title: 'Cơ sở Dữ liệu Phân tán MongoDB',
+          documentType: AppConstants.typeLecture,
+          tags: 'nosql, database',
+        );
 
-      // Tìm từ khóa 'flutter'
-      final results1 = await searchService.filterDocuments(query: 'flutter');
-      expect(results1.length, equals(1));
-      expect(results1.first.title, contains('Flutter'));
+        // Tìm từ khóa 'flutter'
+        final results1 = await searchService.filterDocuments(query: 'flutter');
+        expect(results1.length, equals(1));
+        expect(results1.first.title, contains('Flutter'));
 
-      // Tìm từ khóa trong tags 'database'
-      final results2 = await searchService.filterDocuments(query: 'database');
-      expect(results2.length, equals(1));
-      expect(results2.first.title, contains('MongoDB'));
+        // Tìm từ khóa trong tags 'database'
+        final results2 = await searchService.filterDocuments(query: 'database');
+        expect(results2.length, equals(1));
+        expect(results2.first.title, contains('MongoDB'));
 
-      // Tìm từ khóa không khớp
-      final results3 = await searchService.filterDocuments(query: 'machine learning');
-      expect(results3.isEmpty, isTrue);
-    });
+        // Tìm từ khóa không khớp
+        final results3 = await searchService.filterDocuments(
+          query: 'machine learning',
+        );
+        expect(results3.isEmpty, isTrue);
+      },
+    );
 
-    test('TC-ISO-11: SearchService lọc kết hợp đa chiều (Subject + Type + Status)', () async {
-      await docService.saveDocument(
-        subjectFk: 'sub-mob',
-        title: 'Bài tập 1 - Mobile',
-        documentType: AppConstants.typeAssignment,
-        studyStatus: AppConstants.statusCompleted,
-      );
-      await docService.saveDocument(
-        subjectFk: 'sub-mob',
-        title: 'Bài giảng 1 - Mobile',
-        documentType: AppConstants.typeLecture,
-        studyStatus: AppConstants.statusNotStarted,
-      );
-      await docService.saveDocument(
-        subjectFk: 'sub-web',
-        title: 'Bài tập 1 - Web',
-        documentType: AppConstants.typeAssignment,
-        studyStatus: AppConstants.statusCompleted,
-      );
+    test(
+      'TC-ISO-11: SearchService lọc kết hợp đa chiều (Subject + Type + Status)',
+      () async {
+        await docService.saveDocument(
+          subjectFk: 'sub-mob',
+          title: 'Bài tập 1 - Mobile',
+          documentType: AppConstants.typeAssignment,
+          studyStatus: AppConstants.statusCompleted,
+        );
+        await docService.saveDocument(
+          subjectFk: 'sub-mob',
+          title: 'Bài giảng 1 - Mobile',
+          documentType: AppConstants.typeLecture,
+          studyStatus: AppConstants.statusNotStarted,
+        );
+        await docService.saveDocument(
+          subjectFk: 'sub-web',
+          title: 'Bài tập 1 - Web',
+          documentType: AppConstants.typeAssignment,
+          studyStatus: AppConstants.statusCompleted,
+        );
 
-      // Lọc: Môn MOB + Loại Bài tập + Đã hoàn thành
-      final filtered = await searchService.filterDocuments(
-        subjectFk: 'sub-mob',
-        documentType: AppConstants.typeAssignment,
-        studyStatus: AppConstants.statusCompleted,
-      );
+        // Lọc: Môn MOB + Loại Bài tập + Đã hoàn thành
+        final filtered = await searchService.filterDocuments(
+          subjectFk: 'sub-mob',
+          documentType: AppConstants.typeAssignment,
+          studyStatus: AppConstants.statusCompleted,
+        );
 
-      expect(filtered.length, equals(1));
-      expect(filtered.first.title, equals('Bài tập 1 - Mobile'));
-    });
+        expect(filtered.length, equals(1));
+        expect(filtered.first.title, equals('Bài tập 1 - Mobile'));
+      },
+    );
 
     test('TC-ISO-12: SearchService tính toán số liệu thống kê Dashboard và tỷ lệ hoàn thành', () async {
       await docService.saveDocument(
@@ -560,8 +612,14 @@ void main() {
       expect(restoredEntity.priority, equals(originalEntity.priority));
       expect(restoredEntity.tags, equals(originalEntity.tags));
       expect(restoredEntity.isDeleted, equals(originalEntity.isDeleted));
-      expect(restoredEntity.dateTimeCreated, equals(originalEntity.dateTimeCreated));
-      expect(restoredEntity.dateTimeModified, equals(originalEntity.dateTimeModified));
+      expect(
+        restoredEntity.dateTimeCreated,
+        equals(originalEntity.dateTimeCreated),
+      );
+      expect(
+        restoredEntity.dateTimeModified,
+        equals(originalEntity.dateTimeModified),
+      );
     });
 
     test('TC-ISO-15: SubjectModel, AttachmentModel và DeleteLogModel ánh xạ đúng định dạng CSDL', () {
@@ -578,7 +636,10 @@ void main() {
       final subModel = SubjectModel.fromEntity(subEntity);
       final subMap = subModel.toMap();
       expect(subMap['code'], equals('INT310'));
-      expect(SubjectModel.fromMap(subMap).toEntity().name, equals('Mạng Máy Tính'));
+      expect(
+        SubjectModel.fromMap(subMap).toEntity().name,
+        equals('Mạng Máy Tính'),
+      );
 
       // Test AttachmentModel
       final attEntity = AttachmentEntity(
@@ -593,7 +654,10 @@ void main() {
       final attModel = AttachmentModel.fromEntity(attEntity);
       final attMap = attModel.toMap();
       expect(attMap['fileSizeBytes'], equals(1048576));
-      expect(AttachmentModel.fromMap(attMap).toEntity().fileName, equals('tailieu.pdf'));
+      expect(
+        AttachmentModel.fromMap(attMap).toEntity().fileName,
+        equals('tailieu.pdf'),
+      );
 
       // Test DeleteLogModel
       final logModel = DeleteLogModel(

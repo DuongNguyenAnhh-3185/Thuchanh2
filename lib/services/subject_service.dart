@@ -47,7 +47,9 @@ class SubjectService {
       instructor: instructor.trim(),
       colorHex: colorHex,
       iconName: iconName,
-      dateTimeCreated: isNew ? now : (await getSubjectById(pk))?.dateTimeCreated ?? now,
+      dateTimeCreated: isNew
+          ? now
+          : (await getSubjectById(pk))?.dateTimeCreated ?? now,
     );
 
     if (isNew) {

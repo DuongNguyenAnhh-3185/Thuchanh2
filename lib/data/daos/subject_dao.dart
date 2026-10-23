@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:sqflite/sqflite.dart';
+
 import '../../../core/constants/app_constants.dart';
 import '../datasources/local/app_database.dart';
 import '../models/subject_model.dart';
@@ -12,7 +14,7 @@ class SubjectDao {
       StreamController<List<SubjectModel>>.broadcast();
 
   SubjectDao({AppDatabase? appDatabase})
-      : _appDatabase = appDatabase ?? AppDatabase.instance {
+    : _appDatabase = appDatabase ?? AppDatabase.instance {
     // Kích hoạt nạp dữ liệu ban đầu cho Stream
     _notifyStream();
   }

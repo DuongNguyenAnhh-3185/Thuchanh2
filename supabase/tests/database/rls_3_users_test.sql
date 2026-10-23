@@ -1,7 +1,13 @@
 -- Kiểm thử RLS bằng 3 tài khoản Firebase giả lập.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(18);
+select plan(27);
+
+select extensions.is(
+  (select count(*) from storage.buckets where id = 'documents'),
+  1::bigint,
+  'Private Supabase Storage bucket is provisioned'
+);
 
 insert into public.users (id, email, display_name) values
   ('firebase-alice', 'alice@example.com', 'Alice'),
@@ -9,12 +15,13 @@ insert into public.users (id, email, display_name) values
   ('firebase-carol', 'carol@example.com', 'Carol');
 
 insert into public.documents (
-  id, owner_id, title, file_name, storage_path, file_size_bytes, mime_type
+  id, owner_id, title, file_name, storage_path, file_size_bytes, mime_type,
+  is_borrowable
 ) values
   ('11111111-1111-4111-8111-111111111111', 'firebase-alice', 'Tài liệu Alice',
-   'alice.pdf', 'documents/firebase-alice/11111111-1111-4111-8111-111111111111/alice.pdf', 1024, 'application/pdf'),
+   'alice.pdf', 'documents/firebase-alice/11111111-1111-4111-8111-111111111111/alice.pdf', 1024, 'application/pdf', true),
   ('22222222-2222-4222-8222-222222222222', 'firebase-bob', 'Tài liệu Bob',
-   'bob.pdf', 'documents/firebase-bob/22222222-2222-4222-8222-222222222222/bob.pdf', 2048, 'application/pdf');
+   'bob.pdf', 'documents/firebase-bob/22222222-2222-4222-8222-222222222222/bob.pdf', 2048, 'application/pdf', false);
 
 insert into public.permissions (document_id, user_id, access_level, granted_by)
 values (
@@ -82,6 +89,36 @@ select extensions.is_empty(
   $$,
   'Bob không thể xóa tài liệu của Alice'
 );
+select extensions.lives_ok(
+  $$ select public.register_device_token('dummy-fcm-token-bob', 'web') $$,
+  'Verified user can register a push token'
+);
+select extensions.is(
+  (select count(*) from public.device_tokens),
+  1::bigint,
+  'User can read only their registered push token'
+);
+select extensions.is(
+  (select count(*) from public.search_borrowable_documents('')),
+  1::bigint,
+  'Borrow catalog only returns documents explicitly opened for borrowing'
+);
+select extensions.is(
+  (
+    select status
+    from public.request_document_borrow(
+      '11111111-1111-4111-8111-111111111111',
+      'Tôi muốn mượn tài liệu này'
+    )
+  ),
+  'pending'::text,
+  'Bob can create a borrow request for a listed document'
+);
+select extensions.throws_ok(
+  $$ update public.documents set is_borrowable = false
+     where id = '11111111-1111-4111-8111-111111111111' $$,
+  'P0001', null::text, 'Shared editor cannot change owner borrowing settings'
+);
 reset role;
 
 select set_config('request.jwt.claims', '{"sub":"firebase-bob","iss":"https://securetoken.google.com/device-streaming-33cac12e","aud":"device-streaming-33cac12e"}', true);
@@ -117,6 +154,11 @@ select extensions.is(
   (select count(*) from public.documents),
   0::bigint,
   'Carol chưa được chia sẻ nên không thấy tài liệu'
+);
+select extensions.is(
+  (select count(*) from public.device_tokens),
+  0::bigint,
+  'Other users cannot read Bob push tokens'
 );
 reset role;
 
@@ -165,6 +207,40 @@ select extensions.throws_ok(
   'P0001', null::text, 'Viewer cannot revoke shares'
 );
 reset role;
+
+select set_config('request.jwt.claims', '{"sub":"firebase-alice","iss":"https://securetoken.google.com/device-streaming-33cac12e","aud":"device-streaming-33cac12e"}', true);
+  'request.jwt.claims',
+  '{"sub":"firebase-alice","email":"alice@example.com","email_verified":true,"iss":"https://securetoken.google.com/device-streaming-33cac12e","aud":"device-streaming-33cac12e"}',
+  true
+);
+set local role anon;
+select extensions.is(
+  (
+    select status
+    from public.respond_document_borrow(
+      (
+        select id from public.borrow_requests
+        where document_id = '11111111-1111-4111-8111-111111111111'
+          and requester_id = 'firebase-bob'
+      ),
+      'approved'
+    )
+  ),
+  'approved'::text,
+  'Owner approval grants borrowing request'
+);
+select extensions.is(
+  (
+    select access_level
+    from public.permissions
+    where document_id = '11111111-1111-4111-8111-111111111111'
+      and user_id = 'firebase-bob'
+  ),
+  'editor'::text,
+  'Approving a borrow request does not downgrade existing access'
+);
+reset role;
+
 select set_config('request.jwt.claims', '{"sub":"firebase-alice","iss":"https://securetoken.google.com/device-streaming-33cac12e","aud":"device-streaming-33cac12e"}', true);
 set local role anon;
 select extensions.lives_ok(

@@ -1,9 +1,12 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../../core/constants/app_constants.dart';
 import '../../domain/entities/document_entity.dart';
 import '../../domain/entities/subject_entity.dart';
 import '../../services/document_service.dart';
+import '../../services/recommendation_service.dart';
 import '../../services/search_service.dart';
 import '../../services/subject_service.dart';
 
@@ -12,15 +15,20 @@ class DocumentController extends ChangeNotifier {
   final DocumentService documentService;
   final SubjectService subjectService;
   final SearchService searchService;
+  final RecommendationService recommendationService;
 
   StreamSubscription<List<DocumentEntity>>? _docSub;
   StreamSubscription<List<SubjectEntity>>? _subjectSub;
 
   List<DocumentEntity> _documents = [];
+  List<DocumentEntity> _recommendations = [];
   List<SubjectEntity> _subjects = [];
   bool _isLoading = true;
+  bool _disposed = false;
+  int _generation = 0;
 
   String _searchQuery = '';
+  String? _selectedTag;
   String? _selectedSubjectFk;
   String? _selectedDocumentType;
   String? _selectedStudyStatus;
@@ -30,14 +38,45 @@ class DocumentController extends ChangeNotifier {
     required this.documentService,
     required this.subjectService,
     required this.searchService,
-  }) {
+    RecommendationService? recommendationService,
+  }) : recommendationService =
+           recommendationService ?? RecommendationService() {
     _initStreams();
   }
 
-  List<DocumentEntity> get documents => _documents;
+  List<DocumentEntity> get documents {
+    final selectedTag = _selectedTag;
+    if (selectedTag == null) return _documents;
+
+    return _documents
+        .where(
+          (document) => document.tags
+              .split(',')
+              .any(
+                (tag) => tag.trim().toLowerCase() == selectedTag.toLowerCase(),
+              ),
+        )
+        .toList();
+  }
+
+  List<DocumentEntity> get recommendations => _recommendations;
+
+  List<String> get availableTags {
+    final tags =
+        _documents
+            .expand((document) => document.tags.split(','))
+            .map((tag) => tag.trim())
+            .where((tag) => tag.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return tags;
+  }
+
   List<SubjectEntity> get subjects => _subjects;
   bool get isLoading => _isLoading;
   String get searchQuery => _searchQuery;
+  String? get selectedTag => _selectedTag;
   String? get selectedSubjectFk => _selectedSubjectFk;
   String? get selectedDocumentType => _selectedDocumentType;
   String? get selectedStudyStatus => _selectedStudyStatus;
@@ -49,6 +88,7 @@ class DocumentController extends ChangeNotifier {
 
     // Lắng nghe thay đổi tự động từ SubjectDao
     _subjectSub = subjectService.watchAllSubjects().listen((subList) {
+      if (_disposed) return;
       _subjects = subList;
       notifyListeners();
     });
@@ -60,28 +100,41 @@ class DocumentController extends ChangeNotifier {
   }
 
   Future<void> refreshFilteredList() async {
+    final generation = ++_generation;
+    if (_disposed) return;
     _isLoading = true;
     notifyListeners();
 
     try {
-      _documents = await searchService.filterDocuments(
+      final documents = await searchService.filterDocuments(
         query: _searchQuery,
         subjectFk: _selectedSubjectFk,
         documentType: _selectedDocumentType,
         studyStatus: _selectedStudyStatus,
         sortBy: _sortBy,
       );
+      final allDocuments = await documentService.getAllDocuments();
+      if (_disposed || generation != _generation) return;
+      _documents = documents;
+      _recommendations = recommendationService.recommend(allDocuments);
     } catch (_) {
-      _documents = [];
+      if (!_disposed && generation == _generation) _documents = [];
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (!_disposed && generation == _generation) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
   void setSearchQuery(String query) {
     _searchQuery = query;
     refreshFilteredList();
+  }
+
+  void setSelectedTag(String? tag) {
+    _selectedTag = tag;
+    notifyListeners();
   }
 
   void setSelectedSubject(String? subjectFk) {
@@ -137,6 +190,8 @@ class DocumentController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _generation++;
     _docSub?.cancel();
     _subjectSub?.cancel();
     super.dispose();

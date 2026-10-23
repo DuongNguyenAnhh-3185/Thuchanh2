@@ -1,5 +1,7 @@
 import 'dart:async';
+
 import 'package:sqflite/sqflite.dart';
+
 import '../../../core/constants/app_constants.dart';
 import '../datasources/local/app_database.dart';
 import '../models/attachment_model.dart';
@@ -14,7 +16,7 @@ class DocumentDao {
       StreamController<List<DocumentModel>>.broadcast();
 
   DocumentDao({AppDatabase? appDatabase})
-      : _appDatabase = appDatabase ?? AppDatabase.instance {
+    : _appDatabase = appDatabase ?? AppDatabase.instance {
     _notifyStream();
   }
 
@@ -33,7 +35,9 @@ class DocumentDao {
   }
 
   /// Lấy tất cả tài liệu kèm thông tin Môn học (JOIN bảng)
-  Future<List<DocumentModel>> getAllDocuments({bool includeDeleted = false}) async {
+  Future<List<DocumentModel>> getAllDocuments({
+    bool includeDeleted = false,
+  }) async {
     final db = await _appDatabase.database;
     final whereClause = includeDeleted ? null : 'd.isDeleted = 0';
 
@@ -69,13 +73,17 @@ class DocumentDao {
       }
 
       // Lấy danh sách tệp đính kèm của tài liệu
-      final attachments = await getAttachmentsForDocument(docMap['documentPk'] as String);
+      final attachments = await getAttachmentsForDocument(
+        docMap['documentPk'] as String,
+      );
 
-      documents.add(DocumentModel.fromMap(
-        docMap,
-        subject: subject,
-        attachments: attachments,
-      ));
+      documents.add(
+        DocumentModel.fromMap(
+          docMap,
+          subject: subject,
+          attachments: attachments,
+        ),
+      );
     }
     return documents;
   }
@@ -83,7 +91,8 @@ class DocumentDao {
   /// Lấy chi tiết 1 tài liệu theo ID
   Future<DocumentModel?> getDocumentById(String documentPk) async {
     final db = await _appDatabase.database;
-    final result = await db.rawQuery('''
+    final result = await db.rawQuery(
+      '''
       SELECT 
         d.*,
         s.code AS s_code,
@@ -96,7 +105,9 @@ class DocumentDao {
       LEFT JOIN ${AppConstants.tableSubjects} s ON d.subjectFk = s.subjectPk
       WHERE d.documentPk = ?
       LIMIT 1
-    ''', [documentPk]);
+    ''',
+      [documentPk],
+    );
 
     if (result.isEmpty) return null;
     final row = result.first;
@@ -141,7 +152,9 @@ class DocumentDao {
 
       // Thêm các tệp đính kèm (nếu có)
       for (final att in document.attachments) {
-        final attModel = att is AttachmentModel ? att : AttachmentModel.fromEntity(att);
+        final attModel = att is AttachmentModel
+            ? att
+            : AttachmentModel.fromEntity(att);
         await txn.insert(
           AppConstants.tableAttachments,
           attModel.toMap(),
@@ -171,7 +184,9 @@ class DocumentDao {
       );
 
       for (final att in document.attachments) {
-        final attModel = att is AttachmentModel ? att : AttachmentModel.fromEntity(att);
+        final attModel = att is AttachmentModel
+            ? att
+            : AttachmentModel.fromEntity(att);
         await txn.insert(
           AppConstants.tableAttachments,
           attModel.toMap(),
@@ -209,7 +224,9 @@ class DocumentDao {
   }
 
   /// Lấy danh sách tệp đính kèm của một tài liệu
-  Future<List<AttachmentModel>> getAttachmentsForDocument(String documentPk) async {
+  Future<List<AttachmentModel>> getAttachmentsForDocument(
+    String documentPk,
+  ) async {
     final db = await _appDatabase.database;
     final maps = await db.query(
       AppConstants.tableAttachments,
@@ -235,25 +252,36 @@ class DocumentDao {
         final matchTitle = doc.title.toLowerCase().contains(q);
         final matchNote = doc.note.toLowerCase().contains(q);
         final matchTags = doc.tags.toLowerCase().contains(q);
-        final matchSubject = doc.subject?.name.toLowerCase().contains(q) ?? false;
+        final matchSubject =
+            doc.subject?.name.toLowerCase().contains(q) ?? false;
         final matchCode = doc.subject?.code.toLowerCase().contains(q) ?? false;
-        if (!matchTitle && !matchNote && !matchTags && !matchSubject && !matchCode) {
+        if (!matchTitle &&
+            !matchNote &&
+            !matchTags &&
+            !matchSubject &&
+            !matchCode) {
           return false;
         }
       }
 
       // 2. Lọc theo môn học
-      if (subjectFk != null && subjectFk.isNotEmpty && doc.subjectFk != subjectFk) {
+      if (subjectFk != null &&
+          subjectFk.isNotEmpty &&
+          doc.subjectFk != subjectFk) {
         return false;
       }
 
       // 3. Lọc theo loại tài liệu
-      if (documentType != null && documentType.isNotEmpty && doc.documentType != documentType) {
+      if (documentType != null &&
+          documentType.isNotEmpty &&
+          doc.documentType != documentType) {
         return false;
       }
 
       // 4. Lọc theo trạng thái học tập
-      if (studyStatus != null && studyStatus.isNotEmpty && doc.studyStatus != studyStatus) {
+      if (studyStatus != null &&
+          studyStatus.isNotEmpty &&
+          doc.studyStatus != studyStatus) {
         return false;
       }
 

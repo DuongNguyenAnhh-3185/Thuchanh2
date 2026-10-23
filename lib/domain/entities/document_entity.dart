@@ -11,6 +11,9 @@ class DocumentEntity {
   final String studyStatus; // Chưa học, Đang học, Đã hoàn thành
   final int priority; // 1: Thấp, 2: TB, 3: Cao
   final String tags; // Chuỗi các tags phân cách bởi dấu phẩy
+  final String physicalLocation;
+  final double? latitude;
+  final double? longitude;
   final bool isDeleted; // Soft-delete flag (chuẩn Cashew)
   final int dateTimeCreated; // Epoch ms
   final int dateTimeModified; // Epoch ms
@@ -28,6 +31,9 @@ class DocumentEntity {
     this.studyStatus = 'Chưa học',
     this.priority = 2,
     this.tags = '',
+    this.physicalLocation = '',
+    this.latitude,
+    this.longitude,
     this.isDeleted = false,
     required this.dateTimeCreated,
     required this.dateTimeModified,
@@ -44,6 +50,9 @@ class DocumentEntity {
     String? studyStatus,
     int? priority,
     String? tags,
+    String? physicalLocation,
+    double? latitude,
+    double? longitude,
     bool? isDeleted,
     int? dateTimeCreated,
     int? dateTimeModified,
@@ -59,6 +68,9 @@ class DocumentEntity {
       studyStatus: studyStatus ?? this.studyStatus,
       priority: priority ?? this.priority,
       tags: tags ?? this.tags,
+      physicalLocation: physicalLocation ?? this.physicalLocation,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
       isDeleted: isDeleted ?? this.isDeleted,
       dateTimeCreated: dateTimeCreated ?? this.dateTimeCreated,
       dateTimeModified: dateTimeModified ?? this.dateTimeModified,

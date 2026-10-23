@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../core/constants/app_constants.dart';
 import '../../domain/entities/subject_entity.dart';
 import '../../service_locator.dart';
@@ -75,9 +76,12 @@ class _SubjectListScreenState extends State<SubjectListScreen> {
             child: const Text('Hủy'),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppConstants.primaryColor),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppConstants.primaryColor,
+            ),
             onPressed: () async {
-              if (codeCtrl.text.trim().isEmpty || nameCtrl.text.trim().isEmpty) {
+              if (codeCtrl.text.trim().isEmpty ||
+                  nameCtrl.text.trim().isEmpty) {
                 return;
               }
               Navigator.pop(ctx);
@@ -123,7 +127,10 @@ class _SubjectListScreenState extends State<SubjectListScreen> {
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: const Color(0xFFDBEAFE),
-                      child: const Icon(Icons.school, color: AppConstants.primaryColor),
+                      child: const Icon(
+                        Icons.school,
+                        color: AppConstants.primaryColor,
+                      ),
                     ),
                     title: Text(
                       '${sub.code} - ${sub.name}',

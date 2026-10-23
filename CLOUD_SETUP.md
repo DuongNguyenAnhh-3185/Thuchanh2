@@ -1,146 +1,117 @@
 # Thiết lập Cloud cho CashewDoc
 
-Ứng dụng dùng Firebase Authentication làm nguồn danh tính, Firebase Storage giữ
-tệp vật lý và Supabase Postgres giữ `users`, `documents`, `permissions`. RLS trên
-Supabase kiểm tra trực tiếp Firebase ID token. Firestore chỉ chứa bản sao ACL tối
-thiểu để Firebase Storage Rules có thể kiểm tra quyền đọc tệp; không lưu metadata
-nghiệp vụ trong Firestore.
+Ứng dụng kết hợp **Firebase Authentication và Firebase Cloud Messaging** với
+**Supabase Postgres và Supabase Storage**. SQLite vẫn là thư viện local mặc định,
+hoạt động offline và không cần cấu hình Cloud.
 
-Khi mở ứng dụng, màn hình mặc định là không gian Cloud: đăng nhập Google bằng
-Firebase rồi xem danh sách tài liệu có metadata lấy từ Supabase. Dữ liệu SQLite
-cục bộ vẫn được giữ riêng và mở qua biểu tượng kho lưu trữ trên thanh tiêu đề;
-không trộn dữ liệu mẫu SQLite vào danh sách Supabase.
+## 1. Firebase Authentication và Messaging
 
-## 1. Firebase
+Project Firebase hiện cấu hình trong ứng dụng: `device-streaming-33cac12e`.
 
-Project đã được cấu hình trong mã nguồn là `device-streaming-33cac12e`.
+1. Bật **Authentication > Sign-in method > Google**.
+2. Bật **Cloud Messaging API (V1)** cho project.
+3. Với Android, thêm SHA-1/SHA-256 của keystore cho các bản build sử dụng.
+4. Với Web, tạo Web Push certificate trong **Cloud Messaging > Web configuration**
+   và truyền public VAPID key bằng `FCM_WEB_VAPID_KEY`.
+5. Tệp `web/firebase-messaging-sw.js` là service worker hiển thị thông báo khi
+   ứng dụng Web ở nền. Trình duyệt cần HTTPS hoặc localhost và quyền notification.
 
-1. Trong Firebase Console, bật **Authentication > Sign-in method > Google**.
-2. Thêm SHA-1 và SHA-256 của debug/release keystore cho ứng dụng Android.
-3. Tạo Cloud Firestore ở Production mode và bật Firebase Storage.
-4. Triển khai Rules:
+Không đưa Firebase service-account JSON, private key, Supabase service-role key
+hoặc OAuth client secret vào ứng dụng hay repository.
 
-   ```bash
-   firebase login
-   firebase use device-streaming-33cac12e
-   firebase deploy --only firestore:rules,storage
-   ```
+## 2. Supabase Database và Storage
 
-Không dùng Firebase download URL công khai. Ứng dụng đọc tệp qua Firebase SDK,
-để `storage.rules` luôn kiểm tra người dùng hiện tại.
-
-## 2. Firebase JWT và Postgres role
-
-Firebase ID token mặc định không có custom claim `role`. Supabase ánh xạ request
-này vào Postgres role `anon`; migration cấp quyền tối thiểu cho role đó và RLS
-restrictive tiếp tục bắt buộc `iss`, `aud` và `sub` thuộc đúng Firebase project.
-Request chỉ có publishable key nhưng không có Firebase JWT sẽ bị từ chối.
-
-Vì vậy không cần triển khai thư mục `functions` hay bật Identity Platform chỉ để
-thêm claim `role=authenticated`.
-
-## 3. Supabase
-
-1. Tạo một Supabase project.
+1. Project mặc định: `https://oemlhoqptgrgtwaozmgu.supabase.co`. Publishable key đã có trong cấu hình; có thể ghi đè bằng `--dart-define`.
 2. Vào **Authentication > Third-Party Auth > Firebase**, thêm Firebase Project ID
    `device-streaming-33cac12e`.
-3. Chạy file migration
-   **tất cả file trong supabase/migrations/ theo thứ tự tên** trong SQL Editor, hoặc:
+3. Với project đang có bảng theo báo cáo, chạy toàn bộ `supabase_setup.sql` trong SQL Editor. Script tương thích schema cũ và đã được kiểm tra chạy lại. Với môi trường quản lý migration bằng CLI, dùng:
 
-   ```bash
+   ```powershell
    supabase link --project-ref <project-ref>
    supabase db push
    ```
 
-Migration tạo ba bảng, khóa ngoại, index, RPC chia sẻ/thu hồi và toàn bộ RLS.
-Publishable key có thể đặt ở client; tuyệt đối không đưa `service_role` key vào app.
+   Các migration tạo schema/RLS cho users, documents, sharing, tags, vị trí,
+   yêu cầu mượn, bucket Storage riêng tư và token thiết bị. Storage RLS cấp quyền
+   đọc cho chủ sở hữu/người được chia sẻ; tệp không có public URL.
+4. Truyền Supabase URL và publishable key khi chạy Cloud:
 
-## 4. Chạy ứng dụng
+   ```powershell
+   flutter run -d chrome `
+     --dart-define=SUPABASE_URL=https://<project-ref>.supabase.co `
+     --dart-define=SUPABASE_PUBLISHABLE_KEY=<publishable-key> `
+     --dart-define=FCM_WEB_VAPID_KEY=<web-push-vapid-key>
+   ```
 
-```bash
-flutter pub get
-flutter run \
-  --dart-define=SUPABASE_URL=https://<project-ref>.supabase.co \
-  --dart-define=SUPABASE_PUBLISHABLE_KEY=<publishable-key>
-```
+   Trên Android, bỏ `-d chrome`; `FCM_WEB_VAPID_KEY` chỉ cần cho Web.
 
-Trên PowerShell:
+Firebase ID token được gửi cho Supabase Third-Party Auth. RLS xác nhận issuer,
+audience và Firebase UID; `service_role` key tuyệt đối không được dùng trong app.
+
+## 3. Gửi thông báo đẩy an toàn
+
+Function `supabase/functions/send-cloud-notification` xác minh Firebase ID token,
+kiểm tra người gọi có liên quan tới yêu cầu/chia sẻ, rồi gửi thông báo qua FCM
+HTTP v1. Function đặt `verify_jwt = false` trong Supabase config vì token của app
+là Firebase JWT; function tự xác minh chữ ký, issuer, audience và email đã xác
+thực.
+
+Trong Firebase Console, tạo service account riêng có quyền gửi FCM. Lưu JSON
+service-account bằng Supabase secrets, không commit file JSON:
 
 ```powershell
-flutter run `
-  --dart-define=SUPABASE_URL=https://<project-ref>.supabase.co `
-  --dart-define=SUPABASE_PUBLISHABLE_KEY=<publishable-key>
+supabase secrets set FIREBASE_PROJECT_ID=device-streaming-33cac12e
+supabase secrets set FIREBASE_SERVICE_ACCOUNT='<service-account-json>'
+supabase functions deploy send-cloud-notification --no-verify-jwt
 ```
 
-## 5. Kiểm thử ba tài khoản
+`SUPABASE_URL` và `SUPABASE_SERVICE_ROLE_KEY` được cung cấp cho Edge Function
+trong môi trường Supabase. Service-role key không được truyền đến Flutter.
+Push token được lưu theo UID, có RLS riêng, và được chuyển sang tài khoản đang
+đăng nhập lại trên cùng thiết bị.
 
-Bộ kiểm thử RLS tự động nằm tại
-`supabase/tests/database/rls_3_users_test.sql`:
+Nếu Function/secrets chưa được triển khai, Cloud metadata vẫn hoạt động; UI báo
+riêng khi một thao tác đã lưu thành công nhưng push notification không được gửi.
+Thông báo trên Web không hoạt động nếu thiếu VAPID key hoặc người dùng từ chối
+quyền trình duyệt.
 
-```bash
+## 4. Chạy và kiểm thử
+
+Chạy local:
+
+```powershell
+flutter pub get
+flutter run -d chrome
+```
+
+Cấu hình Supabase mặc định đã có. Trên Windows chạy `run.bat`; script tôn trọng biến môi trường ghi đè và truyền thêm `FCM_WEB_VAPID_KEY` nếu có. Cloud vẫn cần triển khai SQL và bật Third-Party Firebase Auth như mục 2.
+
+Kiểm thử:
+
+```powershell
+flutter test
+flutter analyze
 supabase start
 supabase db reset
 supabase test db
 ```
 
-Kiểm thử thực tế sau khi deploy:
+SQL RLS tests nằm trong `supabase/tests/database/rls_3_users_test.sql` và kiểm
+tra quyền theo ba Firebase UID, catalog/borrow, bucket riêng tư và token thiết
+bị. Build Web release bằng `flutter build web --release`.
 
 | Tài khoản | Thao tác | Kết quả mong đợi |
 |---|---|---|
-| Alice | Tải tài liệu và chia sẻ `editor` cho Bob | Alice thấy quyền của Bob |
-| Bob | Tìm, tải và sửa tiêu đề tài liệu Alice | Thành công; không thể chia sẻ/xóa |
-| Carol | Mở tài liệu trước khi được chia sẻ | Không thấy metadata và không tải được tệp |
-| Alice | Chia sẻ `viewer` cho Carol | Carol thấy và tải được nhưng không sửa được |
-| Alice | Thu hồi quyền Carol | Carol mất quyền metadata lẫn tệp ngay lập tức |
+| Alice | Tải tài liệu, mở cho mượn và chia sẻ với Bob | Metadata và tệp nằm trong Supabase; Bob nhận quyền theo RLS |
+| Bob | Tìm/mượn tài liệu Alice | Chỉ thấy catalog công khai; chủ sở hữu nhận push nếu đã đăng ký |
+| Alice | Chấp nhận yêu cầu mượn | Bob được cấp viewer; Bob nhận thông báo trạng thái |
+| Carol | Mở tài liệu chưa được chia sẻ | Không đọc được metadata hay tệp |
 
-Chạy thêm kiểm thử Flutter:
+Firebase Google Sign-In được cấu hình cho Android/Web. Windows desktop Cloud
+không hỗ trợ Google Sign-In/FCM; dùng Web trên Chrome để chạy đầy đủ luồng Cloud.
 
-```bash
-flutter test
-flutter analyze
-```
+## 5. Tag, vị trí, Realtime và gợi ý
 
-## Lưu ý nền tảng
+Xem `TH2_STATUS.md` để đối chiếu triển khai thực tế với bản đặc tả. Menu Cloud → Tag sở thích để lưu chủ đề; Khám phá & gợi ý tài liệu để xem catalog xếp hạng. Tọa độ mở bản đồ trong ứng dụng. Các migration 202610240003–202610240005 bổ sung publication Realtime, bảng quan hệ/thuật toán gợi ý và kiểm tra token rỗng.
 
-Google Sign-In chính thức hỗ trợ Android, iOS, macOS và Web. Với Windows, chạy
-bản Web (`flutter run -d chrome`) hoặc bổ sung OAuth desktop broker riêng; không
-nhúng OAuth client secret vào ứng dụng Flutter.
-
-## 6. Bổ sung triển khai và kiểm thử
-
-Dùng tài khoản Google A để thử; quyền trong app luôn dựa vào UID/email đã xác
-thực, không hardcode email quản trị.
-
-Trên Windows chạy run.bat ở thư mục gốc: script tải dependencies và chạy Chrome
-cổng 7357. Cung cấp key qua biến môi trường `SUPABASE_PUBLISHABLE_KEY` hoặc nhập
-khi được hỏi; không lưu key vào script. Có thể dùng run.bat --release.
-Thêm localhost vào Firebase Authentication > Settings > Authorized domains.
-
-Migration 202610220001_identity_and_storage_integrity.sql bắt buộc email đã xác
-thực khớp JWT và đường dẫn khớp owner/UUID. Constraint được tạo NOT VALID để
-không chặn dữ liệu cũ, vẫn kiểm tra mọi dòng mới/cập nhật. Đối soát đường dẫn cũ
-rồi chạy ALTER TABLE public.documents VALIDATE CONSTRAINT documents_storage_path_matches_identity.
-
-Storage Rules đối chiếu chủ ACL với UID trên đường dẫn. Tệp không được ghi đè;
-editor chỉ sửa tiêu đề/mô tả. Không dùng download URL chứa token.
-
-Firebase và Supabase không có transaction chung. Nếu ghi ACL thất bại, app hoàn
-tác SQL về quyền cũ. Nếu thu hồi SQL thất bại, app giữ quyền tải tệp bị chặn và
-yêu cầu thử lại. Nếu cả thao tác và hoàn tác lỗi, mở lại danh sách quyền và thử
-lại. Kiểm thử Google/Storage thực theo CLOUD_TEST_RESULTS.md trước khi nộp bài.
-
-Tham khảo chính thức:
-- https://supabase.com/docs/guides/auth/third-party/firebase-auth
-- https://firebase.google.com/docs/storage/security/rules-conditions
-
-## 7. Tải tệp trên Web (CORS)
-
-Nếu trình duyệt báo lỗi CORS khi tải tệp, quản trị dự án cấu hình bucket bằng
-Google Cloud CLI (đăng nhập tài khoản quản trị dự án):
-
-    gcloud auth login
-    gcloud storage buckets update gs://device-streaming-33cac12e.firebasestorage.app --cors-file=storage.cors.json
-
-File CORS cho phép hai origin local cổng 7357 dùng bởi run.bat; khi triển khai
-Web thật, bổ sung origin HTTPS của ứng dụng. CORS không cấp quyền truy cập tệp;
-Storage Rules vẫn kiểm tra Firebase Authentication và ACL.
+Tài liệu chính thức: [Firebase Third-Party Auth](https://supabase.com/docs/guides/auth/third-party/firebase-auth), [Supabase Postgres Changes](https://supabase.com/docs/guides/realtime/postgres-changes), [flutter_map](https://docs.fleaflet.dev/usage/options).

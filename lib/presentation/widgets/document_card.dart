@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../core/utils/date_helper.dart';
 import '../../domain/entities/document_entity.dart';
 import 'status_badge.dart';
@@ -54,7 +55,10 @@ class DocumentCard extends StatelessWidget {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       color: subjectColor.withAlpha(30),
                       borderRadius: BorderRadius.circular(6),
@@ -72,10 +76,7 @@ class DocumentCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       document.documentType,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[600],
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -103,10 +104,7 @@ class DocumentCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   document.note,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey[600],
-                  ),
+                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -118,9 +116,13 @@ class DocumentCard extends StatelessWidget {
                 children: [
                   Icon(Icons.access_time, size: 14, color: Colors.grey[500]),
                   const SizedBox(width: 4),
-                  Text(
-                    'Cập nhật: ${DateHelper.formatTimestamp(document.dateTimeModified)}',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                  Expanded(
+                    child: Text(
+                      'Cập nhật: ${DateHelper.formatTimestamp(document.dateTimeModified)}',
+                      style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   if (document.attachments.isNotEmpty) ...[
                     const SizedBox(width: 12),
@@ -131,9 +133,13 @@ class DocumentCard extends StatelessWidget {
                       style: TextStyle(fontSize: 11, color: Colors.grey[500]),
                     ),
                   ],
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   IconButton(
-                    icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      size: 18,
+                      color: Colors.redAccent,
+                    ),
                     onPressed: onDelete,
                     tooltip: 'Xóa tài liệu',
                     constraints: const BoxConstraints(),

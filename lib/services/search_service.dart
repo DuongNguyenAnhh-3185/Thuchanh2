@@ -14,7 +14,8 @@ class SearchService {
     String? subjectFk,
     String? documentType,
     String? studyStatus,
-    String sortBy = 'date_desc', // date_desc, date_asc, title_asc, priority_desc
+    String sortBy =
+        'date_desc', // date_desc, date_asc, title_asc, priority_desc
   }) async {
     final list = await documentRepository.searchAndFilterDocuments(
       query: query,
@@ -30,7 +31,9 @@ class SearchService {
         result.sort((a, b) => a.dateTimeModified.compareTo(b.dateTimeModified));
         break;
       case 'title_asc':
-        result.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+        result.sort(
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+        );
         break;
       case 'priority_desc':
         result.sort((a, b) => b.priority.compareTo(a.priority));
@@ -45,7 +48,9 @@ class SearchService {
 
   /// Tính toán số liệu thống kê học tập (phục vụ màn hình Dashboard kiểu Cashew)
   Future<Map<String, dynamic>> getLearningStatistics() async {
-    final docs = await documentRepository.getAllDocuments(includeDeleted: false);
+    final docs = await documentRepository.getAllDocuments(
+      includeDeleted: false,
+    );
     final total = docs.length;
 
     int completed = 0;

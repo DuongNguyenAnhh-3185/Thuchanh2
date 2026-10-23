@@ -11,11 +11,17 @@ class DocumentService {
 
   DocumentService({required this.documentRepository});
 
-  Future<List<DocumentEntity>> getAllDocuments({bool includeDeleted = false}) async {
-    return await documentRepository.getAllDocuments(includeDeleted: includeDeleted);
+  Future<List<DocumentEntity>> getAllDocuments({
+    bool includeDeleted = false,
+  }) async {
+    return await documentRepository.getAllDocuments(
+      includeDeleted: includeDeleted,
+    );
   }
 
-  Stream<List<DocumentEntity>> watchAllDocuments({bool includeDeleted = false}) {
+  Stream<List<DocumentEntity>> watchAllDocuments({
+    bool includeDeleted = false,
+  }) {
     return documentRepository.watchAllDocuments(includeDeleted: includeDeleted);
   }
 
@@ -33,6 +39,9 @@ class DocumentService {
     String studyStatus = AppConstants.statusNotStarted,
     int priority = AppConstants.priorityMedium,
     String tags = '',
+    String physicalLocation = '',
+    double? latitude,
+    double? longitude,
     List<AttachmentEntity> attachments = const [],
   }) async {
     if (title.trim().isEmpty) {
@@ -43,6 +52,13 @@ class DocumentService {
     }
     if (!AppConstants.documentTypes.contains(documentType)) {
       throw ArgumentError('Loại tài liệu không hợp lệ: $documentType');
+    }
+    if ((latitude == null) != (longitude == null) ||
+        (latitude != null &&
+            (!latitude.isFinite || latitude < -90 || latitude > 90)) ||
+        (longitude != null &&
+            (!longitude.isFinite || longitude < -180 || longitude > 180))) {
+      throw ArgumentError('Tọa độ vị trí không hợp lệ.');
     }
 
     final isNew = documentPk == null || documentPk.isEmpty;
@@ -60,7 +76,9 @@ class DocumentService {
 
     // Đảm bảo các tệp đính kèm đều có UUID và liên kết khóa ngoại documentFk
     final preparedAttachments = attachments.map((att) {
-      final attPk = att.attachmentPk.isEmpty ? UuidHelper.generate() : att.attachmentPk;
+      final attPk = att.attachmentPk.isEmpty
+          ? UuidHelper.generate()
+          : att.attachmentPk;
       return att.copyWith(
         attachmentPk: attPk,
         documentFk: pk,
@@ -77,6 +95,9 @@ class DocumentService {
       studyStatus: studyStatus,
       priority: priority,
       tags: tags.trim(),
+      physicalLocation: physicalLocation.trim(),
+      latitude: latitude,
+      longitude: longitude,
       isDeleted: false,
       dateTimeCreated: createdAt,
       dateTimeModified: now,

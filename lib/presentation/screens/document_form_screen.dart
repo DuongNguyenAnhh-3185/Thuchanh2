@@ -10,6 +10,7 @@ import '../../domain/entities/subject_entity.dart';
 import '../../service_locator.dart';
 import '../widgets/responsive_content.dart';
 import '../widgets/tag_editor.dart';
+import '../widgets/location_map_button.dart';
 
 /// Màn hình Thêm mới / Chỉnh sửa tài liệu học tập
 class DocumentFormScreen extends StatefulWidget {
@@ -27,6 +28,9 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _noteController;
   late final TextEditingController _tagsController;
+  late final TextEditingController _locationController;
+  late final TextEditingController _latitudeController;
+  late final TextEditingController _longitudeController;
 
   String? _selectedSubjectFk;
   String _selectedType = AppConstants.documentTypes.first;
@@ -43,6 +47,15 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
     _titleController = TextEditingController(text: doc?.title ?? '');
     _noteController = TextEditingController(text: doc?.note ?? '');
     _tagsController = TextEditingController(text: doc?.tags ?? '');
+    _locationController = TextEditingController(
+      text: doc?.physicalLocation ?? '',
+    );
+    _latitudeController = TextEditingController(
+      text: doc?.latitude?.toString() ?? '',
+    );
+    _longitudeController = TextEditingController(
+      text: doc?.longitude?.toString() ?? '',
+    );
     _selectedSubjectFk = doc?.subjectFk;
     if (doc != null) {
       _selectedType = doc.documentType;
@@ -69,6 +82,9 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
     _titleController.dispose();
     _noteController.dispose();
     _tagsController.dispose();
+    _locationController.dispose();
+    _latitudeController.dispose();
+    _longitudeController.dispose();
     super.dispose();
   }
 
@@ -306,6 +322,24 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
       ).showSnackBar(const SnackBar(content: Text('Vui lòng chọn môn học!')));
       return;
     }
+    final latitudeText = _latitudeController.text.trim();
+    final longitudeText = _longitudeController.text.trim();
+    final latitude = latitudeText.isEmpty
+        ? null
+        : double.tryParse(latitudeText);
+    final longitude = longitudeText.isEmpty
+        ? null
+        : double.tryParse(longitudeText);
+    if ((latitudeText.isNotEmpty && latitude == null) ||
+        (longitudeText.isNotEmpty && longitude == null) ||
+        (latitude == null) != (longitude == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nhập cả vĩ độ và kinh độ bằng số hợp lệ.'),
+        ),
+      );
+      return;
+    }
 
     try {
       await ServiceLocator.instance.documentService.saveDocument(
@@ -317,6 +351,9 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
         studyStatus: _selectedStatus,
         priority: _priority,
         tags: _tagsController.text.trim(),
+        physicalLocation: _locationController.text.trim(),
+        latitude: latitude,
+        longitude: longitude,
         attachments: _attachments,
       );
 
@@ -463,6 +500,52 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
                         ),
                       ),
                       const SizedBox(height: 20),
+
+                      TextFormField(
+                        controller: _locationController,
+                        onChanged: (_) => setState(() {}),
+                        maxLength: 300,
+                        decoration: const InputDecoration(
+                          labelText: 'Vị trí lưu tài liệu',
+                          hintText: 'Ví dụ: Tủ sách tầng 2, ngăn B',
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.place_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _latitudeController,
+                        onChanged: (_) => setState(() {}),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                          signed: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Vĩ độ (tùy chọn)',
+                          hintText: '21.0285',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _longitudeController,
+                        onChanged: (_) => setState(() {}),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                          signed: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Kinh độ (tùy chọn)',
+                          hintText: '105.8542',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      LocationMapButton(
+                        location: _locationController.text.trim(),
+                        latitude: double.tryParse(_latitudeController.text),
+                        longitude: double.tryParse(_longitudeController.text),
+                      ),
+                      const SizedBox(height: 12),
 
                       // ==========================================
                       // KHỐI QUẢN LÝ TỆP ĐÍNH KÈM (ATTACHMENTS)

@@ -18,19 +18,19 @@ class ServiceLocator {
   ServiceLocator._internal();
 
   // 1. Data Layer Singletons
-  late final AppDatabase database;
-  late final SubjectDao subjectDao;
-  late final DocumentDao documentDao;
-  late final DeleteLogDao deleteLogDao;
+  late AppDatabase database;
+  late SubjectDao subjectDao;
+  late DocumentDao documentDao;
+  late DeleteLogDao deleteLogDao;
 
   // 2. Repository Layer Singletons
-  late final ISubjectRepository subjectRepository;
-  late final IDocumentRepository documentRepository;
+  late ISubjectRepository subjectRepository;
+  late IDocumentRepository documentRepository;
 
   // 3. Service Layer Singletons
-  late final SubjectService subjectService;
-  late final DocumentService documentService;
-  late final SearchService searchService;
+  late SubjectService subjectService;
+  late DocumentService documentService;
+  late SearchService searchService;
 
   bool _initialized = false;
 

@@ -1,9 +1,8 @@
-import 'dart:typed_data';
+import 'dart:async';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 import 'package:uuid/uuid.dart';
 
@@ -18,26 +17,70 @@ class CloudOperationException implements Exception {
   String toString() => message;
 }
 
-/// Điều phối Firebase Storage và metadata quan hệ trên Supabase.
-///
-/// Supabase là nguồn dữ liệu chính. Firestore chỉ giữ ACL tối thiểu để
-/// Firebase Storage Rules có thể kiểm tra người được chia sẻ.
+/// Điều phối Supabase Storage và metadata quan hệ trên Supabase.
 class CloudWorkspaceService {
-  CloudWorkspaceService({
-    FirebaseAuth? auth,
-    FirebaseStorage? storage,
-    FirebaseFirestore? firestore,
-    SupabaseClient? supabase,
-  }) : _auth = auth ?? FirebaseAuth.instance,
-       _storage = storage ?? FirebaseStorage.instance,
-       _firestore = firestore ?? FirebaseFirestore.instance,
-       _providedSupabase = supabase;
+  CloudWorkspaceService({FirebaseAuth? auth, SupabaseClient? supabase})
+    : _auth = auth ?? FirebaseAuth.instance,
+      _providedSupabase = supabase;
+
+  void Function(String message)? onNotificationWarning;
+
+  /// Re-query under RLS instead of trusting event payloads.
+  Stream<void> watchChanges() {
+    late StreamController<void> controller;
+    RealtimeChannel? channel;
+    StreamSubscription<User?>? tokenSubscription;
+    var closed = false;
+    controller = StreamController<void>(
+      onListen: () async {
+        try {
+          await _supabase.realtime.setAuth(await _user.getIdToken());
+          if (closed) return;
+          channel = _supabase.channel('workspace-${_user.uid}-${_uuid.v4()}');
+          for (final table in ['documents', 'permissions', 'borrow_requests']) {
+            channel!.onPostgresChanges(
+              event: PostgresChangeEvent.all,
+              schema: 'public',
+              table: table,
+              callback: (_) {
+                if (!closed) controller.add(null);
+              },
+            );
+          }
+          channel!.subscribe((status, error) {
+            if (closed) return;
+            if (status == RealtimeSubscribeStatus.subscribed) {
+              controller.add(null);
+            } else if (error != null) {
+              controller.addError(error);
+            }
+          });
+          tokenSubscription = _auth.idTokenChanges().listen((user) async {
+            try {
+              if (user != null && !closed) {
+                await _supabase.realtime.setAuth(await user.getIdToken());
+              }
+            } catch (error) {
+              if (!closed) controller.addError(error);
+            }
+          });
+        } catch (error) {
+          if (!closed) controller.addError(error);
+        }
+      },
+      onCancel: () async {
+        closed = true;
+        await tokenSubscription?.cancel();
+        if (channel != null) await _supabase.removeChannel(channel!);
+      },
+    );
+    return controller.stream;
+  }
 
   static const int maxFileSizeBytes = 25 * 1024 * 1024;
+  static const String _storageBucket = 'documents';
 
   final FirebaseAuth _auth;
-  final FirebaseStorage _storage;
-  final FirebaseFirestore _firestore;
   final SupabaseClient? _providedSupabase;
   final Uuid _uuid = const Uuid();
 
@@ -102,7 +145,10 @@ class CloudWorkspaceService {
           if (normalizedQuery.isEmpty) return true;
           return document.title.toLowerCase().contains(normalizedQuery) ||
               document.description.toLowerCase().contains(normalizedQuery) ||
-              document.fileName.toLowerCase().contains(normalizedQuery);
+              document.fileName.toLowerCase().contains(normalizedQuery) ||
+              document.tags.any(
+                (tag) => tag.toLowerCase().contains(normalizedQuery),
+              );
         })
         .toList(growable: false);
   }
@@ -111,6 +157,11 @@ class CloudWorkspaceService {
     required PlatformFile file,
     required String title,
     String description = '',
+    List<String> tags = const [],
+    String physicalLocation = '',
+    double? latitude,
+    double? longitude,
+    bool isBorrowable = false,
   }) async {
     final user = _user;
     final normalizedTitle = title.trim();
@@ -119,6 +170,7 @@ class CloudWorkspaceService {
         'Tiêu đề tài liệu không được để trống.',
       );
     }
+    _validateCoordinates(latitude, longitude);
 
     final fileSize = file.lengthSync() ?? await file.length();
     if (fileSize == null) {
@@ -141,22 +193,9 @@ class CloudWorkspaceService {
     final safeName = _safeFileName(file.name);
     final storagePath = 'documents/${user.uid}/$documentId/$safeName';
     final mimeType = _mimeTypeOf(safeName);
-    final storageRef = _storage.ref().child(storagePath);
     var metadataCreated = false;
 
     try {
-      await storageRef.putData(
-        bytes,
-        SettableMetadata(
-          contentType: mimeType,
-          customMetadata: {
-            'documentId': documentId,
-            'ownerUid': user.uid,
-            'originalName': file.name,
-          },
-        ),
-      );
-
       final inserted = await _supabase
           .from('documents')
           .insert({
@@ -168,12 +207,24 @@ class CloudWorkspaceService {
             'storage_path': storagePath,
             'file_size_bytes': fileSize,
             'mime_type': mimeType,
+            'tags': tags,
+            'physical_location': physicalLocation.trim(),
+            'latitude': latitude,
+            'longitude': longitude,
+            'is_borrowable': isBorrowable,
           })
           .select()
           .single();
       metadataCreated = true;
 
-      await _createOwnerAcl(documentId, user.uid);
+      await _supabase.storage
+          .from(_storageBucket)
+          .uploadBinary(
+            _storageObjectKey(storagePath),
+            bytes,
+            fileOptions: FileOptions(contentType: mimeType, upsert: false),
+          );
+
       return CloudDocument.fromMap(
         Map<String, dynamic>.from(inserted),
         currentUserId: user.uid,
@@ -181,15 +232,18 @@ class CloudWorkspaceService {
     } catch (error) {
       if (metadataCreated) {
         try {
-          await _supabase.from('documents').delete().eq('id', documentId);
-        } catch (_) {
-          // Giữ lỗi gốc; tài liệu hướng dẫn có quy trình đối soát orphan.
+          await _supabase.storage.from(_storageBucket).remove([
+            _storageObjectKey(storagePath),
+          ]);
+        } catch (cleanupError) {
+          // Keep the original operation error; report failed compensation.
+          debugPrint('Supabase Storage upload cleanup failed: $cleanupError');
         }
-      }
-      try {
-        await storageRef.delete();
-      } catch (_) {
-        // Upload có thể chưa hoàn tất nên đối tượng chưa tồn tại.
+        try {
+          await _supabase.from('documents').delete().eq('id', documentId);
+        } catch (cleanupError) {
+          debugPrint('Supabase metadata upload cleanup failed: $cleanupError');
+        }
       }
       rethrow;
     }
@@ -199,6 +253,11 @@ class CloudWorkspaceService {
     required String documentId,
     required String title,
     required String description,
+    required List<String> tags,
+    required String physicalLocation,
+    required double? latitude,
+    required double? longitude,
+    required bool isBorrowable,
   }) async {
     final normalizedTitle = title.trim();
     if (normalizedTitle.isEmpty) {
@@ -206,20 +265,50 @@ class CloudWorkspaceService {
         'Tiêu đề tài liệu không được để trống.',
       );
     }
+    _validateCoordinates(latitude, longitude);
     await _supabase
         .from('documents')
-        .update({'title': normalizedTitle, 'description': description.trim()})
+        .update({
+          'title': normalizedTitle,
+          'description': description.trim(),
+          'tags': tags,
+          'physical_location': physicalLocation.trim(),
+          'latitude': latitude,
+          'longitude': longitude,
+          'is_borrowable': isBorrowable,
+        })
         .eq('id', documentId)
         .select('id')
         .single();
   }
 
+  Future<List<String>> getInterests() async {
+    final row = await _supabase
+        .from('users')
+        .select('interests')
+        .eq('id', _user.uid)
+        .single();
+    return List<String>.from(row['interests'] as List? ?? const []);
+  }
+
+  Future<void> saveInterests(String value) async {
+    final tags = value
+        .split(',')
+        .map((tag) => tag.trim().toLowerCase())
+        .where((tag) => tag.isNotEmpty)
+        .toSet()
+        .toList();
+    await _supabase
+        .from('users')
+        .update({'interests': tags})
+        .eq('id', _user.uid);
+  }
+
   Future<bool> downloadDocument(CloudDocument document) async {
-    final bytes = await _storage
-        .ref()
-        .child(document.storagePath)
-        .getData(maxFileSizeBytes);
-    if (bytes == null) {
+    final bytes = await _supabase.storage
+        .from(_storageBucket)
+        .download(_storageObjectKey(document.storagePath));
+    if (bytes.isEmpty) {
       throw const CloudOperationException('Không đọc được dữ liệu tệp.');
     }
 
@@ -229,6 +318,16 @@ class CloudWorkspaceService {
       bytes: Uint8List.fromList(bytes),
       mimeType: document.mimeType,
     );
+    if (savedFile != null) {
+      try {
+        await _supabase.rpc(
+          'record_document_activity',
+          params: {'p_document_id': document.id, 'p_action': 'download'},
+        );
+      } catch (error) {
+        debugPrint('Activity recording failed: $error');
+      }
+    }
     return savedFile != null;
   }
 
@@ -255,7 +354,6 @@ class CloudWorkspaceService {
       throw const CloudOperationException('Email người nhận không hợp lệ.');
     }
 
-    final previousPermissions = await getPermissions(documentId);
     final response = await _supabase.rpc(
       'share_document',
       params: {
@@ -271,50 +369,12 @@ class CloudWorkspaceService {
       );
     }
     final permission = DocumentPermission.fromMap(rows.first);
-
-    try {
-      await _firestore
-          .collection('storage_acl')
-          .doc(documentId)
-          .collection('readers')
-          .doc(permission.userId)
-          .set({
-            'uid': permission.userId,
-            'access_level': permission.accessLevel.databaseValue,
-            'granted_at': FieldValue.serverTimestamp(),
-          });
-    } catch (error) {
-      // Preserve the previous role when changing an existing share fails.
-      final previous = previousPermissions
-          .where((entry) => entry.userId == permission.userId)
-          .firstOrNull;
-      try {
-        if (previous == null) {
-          await _supabase.rpc(
-            'revoke_document_permission',
-            params: {
-              'p_document_id': documentId,
-              'p_user_id': permission.userId,
-            },
-          );
-        } else {
-          await _supabase.rpc(
-            'share_document',
-            params: {
-              'p_document_id': documentId,
-              'p_user_email': previous.email,
-              'p_access_level': previous.accessLevel.databaseValue,
-            },
-          );
-        }
-      } catch (_) {
-        throw const CloudOperationException(
-          'Chia sẻ chưa đồng bộ giữa Supabase và Storage. '
-          'Hãy kiểm tra danh sách quyền và thử lại thao tác.',
-        );
-      }
-      rethrow;
-    }
+    await _sendCloudNotification(
+      event: 'document_shared',
+      resourceId: documentId,
+      recipientId: permission.userId,
+      savedAction: 'Quyền chia sẻ đã được cấp',
+    );
     return permission;
   }
 
@@ -322,39 +382,114 @@ class CloudWorkspaceService {
     required String documentId,
     required DocumentPermission permission,
   }) async {
-    final readerRef = _firestore
-        .collection('storage_acl')
-        .doc(documentId)
-        .collection('readers')
-        .doc(permission.userId);
-    await readerRef.delete();
-    try {
-      await _supabase.rpc(
-        'revoke_document_permission',
-        params: {'p_document_id': documentId, 'p_user_id': permission.userId},
-      );
-    } catch (error) {
-      // Keep file access revoked if SQL fails or its response times out.
-      throw const CloudOperationException(
-        'Đã chặn quyền tải tệp nhưng chưa xác nhận thu hồi metadata. '
-        'Hãy thử thu hồi lại để hoàn tất.',
-      );
-    }
+    await _supabase.rpc(
+      'revoke_document_permission',
+      params: {'p_document_id': documentId, 'p_user_id': permission.userId},
+    );
   }
 
-  Future<void> _createOwnerAcl(String documentId, String ownerUid) async {
-    final documentRef = _firestore.collection('storage_acl').doc(documentId);
-    final batch = _firestore.batch();
-    batch.set(documentRef, {
-      'owner_uid': ownerUid,
-      'created_at': FieldValue.serverTimestamp(),
-    });
-    batch.set(documentRef.collection('readers').doc(ownerUid), {
-      'uid': ownerUid,
-      'access_level': 'owner',
-      'granted_at': FieldValue.serverTimestamp(),
-    });
-    await batch.commit();
+  Future<List<CloudBorrowRequest>> getBorrowRequests() async {
+    final userId = _user.uid;
+    final responses = await Future.wait<dynamic>([
+      _supabase
+          .from('borrow_requests')
+          .select()
+          .eq('owner_id', userId)
+          .order('created_at', ascending: false),
+      _supabase
+          .from('borrow_requests')
+          .select()
+          .eq('requester_id', userId)
+          .order('created_at', ascending: false),
+    ]);
+    final rows = <String, Map<String, dynamic>>{};
+    for (final response in responses) {
+      for (final row in _asRows(response)) {
+        rows[row['id'] as String] = row;
+      }
+    }
+    return rows.values.map(CloudBorrowRequest.fromMap).toList(growable: false);
+  }
+
+  Future<List<Map<String, dynamic>>> searchBorrowableDocuments({
+    String query = '',
+    bool recommended = false,
+  }) async {
+    final response = await _supabase.rpc(
+      recommended
+          ? 'recommend_borrowable_documents'
+          : 'search_borrowable_documents',
+      params: {'p_query': query.trim()},
+    );
+    return _asRows(response);
+  }
+
+  Future<void> requestBorrow({
+    required String documentId,
+    String message = '',
+  }) async {
+    final response = await _supabase.rpc(
+      'request_document_borrow',
+      params: {'p_document_id': documentId, 'p_message': message.trim()},
+    );
+    final rows = _asRows(response);
+    if (rows.isEmpty) {
+      throw const CloudOperationException(
+        'Không nhận được thông tin yêu cầu mượn vừa tạo.',
+      );
+    }
+    await _sendCloudNotification(
+      event: 'borrow_requested',
+      resourceId: rows.first['id'] as String,
+      savedAction: 'Yêu cầu mượn đã được lưu',
+    );
+  }
+
+  Future<void> respondToBorrowRequest(
+    CloudBorrowRequest request, {
+    required bool approve,
+  }) async {
+    final response = await _supabase.rpc(
+      'respond_document_borrow',
+      params: {
+        'p_request_id': request.id,
+        'p_status': approve ? 'approved' : 'rejected',
+      },
+    );
+    final rows = _asRows(response);
+    if (rows.isEmpty) {
+      throw const CloudOperationException(
+        'Không nhận được trạng thái mới của yêu cầu mượn.',
+      );
+    }
+    await _sendCloudNotification(
+      event: 'borrow_responded',
+      resourceId: request.id,
+      savedAction: approve
+          ? 'Yêu cầu mượn đã được chấp nhận'
+          : 'Yêu cầu mượn đã bị từ chối',
+    );
+  }
+
+  Future<void> _sendCloudNotification({
+    required String event,
+    required String resourceId,
+    String? recipientId,
+    required String savedAction,
+  }) async {
+    try {
+      await _supabase.functions.invoke(
+        'send-cloud-notification',
+        body: {
+          'event': event,
+          'resource_id': resourceId,
+          'recipient_id': ?recipientId,
+        },
+      );
+    } catch (error) {
+      debugPrint('Notification delivery failed after $savedAction: $error');
+      onNotificationWarning?.call('$savedAction; chưa gửi được thông báo đẩy.');
+    }
   }
 
   static List<Map<String, dynamic>> _asRows(dynamic response) {
@@ -364,11 +499,34 @@ class CloudWorkspaceService {
         .toList(growable: false);
   }
 
+  static void _validateCoordinates(double? latitude, double? longitude) {
+    if ((latitude == null) != (longitude == null) ||
+        (latitude != null &&
+            (!latitude.isFinite || latitude < -90 || latitude > 90)) ||
+        (longitude != null &&
+            (!longitude.isFinite || longitude < -180 || longitude > 180))) {
+      throw const CloudOperationException('Tọa độ vị trí không hợp lệ.');
+    }
+  }
+
   static String _safeFileName(String original) {
     final sanitized = original
         .replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_')
         .replaceAll(RegExp(r'_+'), '_');
     return sanitized.isEmpty ? 'document.bin' : sanitized;
+  }
+
+  static String _storageObjectKey(String storagePath) {
+    const prefix = '$_storageBucket/';
+    final segments = storagePath.split('/');
+    if (!storagePath.startsWith(prefix) ||
+        segments.length != 4 ||
+        segments.any((segment) => segment.isEmpty)) {
+      throw const CloudOperationException(
+        'Đường dẫn tệp trên Supabase Storage không hợp lệ.',
+      );
+    }
+    return segments.skip(1).join('/');
   }
 
   static String _mimeTypeOf(String fileName) {

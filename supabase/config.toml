@@ -3,3 +3,6 @@ project_id = "cloud-cashewstudy"
 [auth.third_party.firebase]
 enabled = true
 project_id = "device-streaming-33cac12e"
+
+[functions.send-cloud-notification]
+verify_jwt = false

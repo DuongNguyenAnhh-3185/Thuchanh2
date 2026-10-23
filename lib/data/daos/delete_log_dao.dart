@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+
 import '../../../core/constants/app_constants.dart';
 import '../datasources/local/app_database.dart';
 import '../models/delete_log_model.dart';
@@ -9,7 +10,7 @@ class DeleteLogDao {
   final AppDatabase _appDatabase;
 
   DeleteLogDao({AppDatabase? appDatabase})
-      : _appDatabase = appDatabase ?? AppDatabase.instance;
+    : _appDatabase = appDatabase ?? AppDatabase.instance;
 
   Future<void> insertLog(DeleteLogModel log) async {
     final db = await _appDatabase.database;

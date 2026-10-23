@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../core/constants/app_constants.dart';
 
 /// Huy hiệu hiển thị trạng thái học tập (Chưa học, Đang học, Đã hoàn thành)
@@ -6,11 +7,7 @@ class StatusBadge extends StatelessWidget {
   final String status;
   final VoidCallback? onTap;
 
-  const StatusBadge({
-    super.key,
-    required this.status,
-    this.onTap,
-  });
+  const StatusBadge({super.key, required this.status, this.onTap});
 
   @override
   Widget build(BuildContext context) {

@@ -8,11 +8,13 @@ returns boolean
 language sql
 stable
 as $$
-  select
+  select coalesce(
     auth.jwt()->>'iss' =
       'https://securetoken.google.com/device-streaming-33cac12e'
     and auth.jwt()->>'aud' = 'device-streaming-33cac12e'
-    and nullif(auth.jwt()->>'sub', '') is not null
+    and nullif(auth.jwt()->>'sub', '') is not null,
+    false
+  )
 $$;
 
 alter policy users_firebase_project_guard

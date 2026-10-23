@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../core/constants/app_constants.dart';
 import '../../service_locator.dart';
 
@@ -22,14 +23,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadStats() async {
     setState(() => _isLoading = true);
-    final data = await ServiceLocator.instance.searchService.getLearningStatistics();
+    final data = await ServiceLocator.instance.searchService
+        .getLearningStatistics();
     setState(() {
       _stats = data;
       _isLoading = false;
     });
   }
 
-  Widget _buildSummaryCard(String title, String value, IconData icon, Color color) {
+  Widget _buildSummaryCard(
+    String title,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(14),
@@ -110,9 +117,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: LinearProgressIndicator(
-                            value: ((_stats?['completionRate'] as double? ?? 0.0) / 100),
+                            value:
+                                ((_stats?['completionRate'] as double? ?? 0.0) /
+                                100),
                             backgroundColor: Colors.white24,
-                            valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF10B981)),
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              Color(0xFF10B981),
+                            ),
                             minHeight: 10,
                           ),
                         ),
@@ -151,7 +162,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   // 3. Phân bổ theo loại tài liệu
                   const Text(
                     'Cơ cấu theo Loại tài liệu',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1E293B),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Card(
@@ -165,27 +180,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         children: [
-                          ...((_stats?['countByType'] as Map<String, int>?)?.entries.map((entry) {
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 6),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.circle, size: 10, color: AppConstants.secondaryColor),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          entry.key,
-                                          style: const TextStyle(fontSize: 14),
-                                        ),
+                          ...((_stats?['countByType'] as Map<String, int>?)
+                                  ?.entries
+                                  .map((entry) {
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 6,
                                       ),
-                                      Text(
-                                        '${entry.value} tài liệu',
-                                        style: const TextStyle(fontWeight: FontWeight.bold),
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.circle,
+                                            size: 10,
+                                            color: AppConstants.secondaryColor,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              entry.key,
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                          Text(
+                                            '${entry.value} tài liệu',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
-                                );
-                              }).toList() ??
+                                    );
+                                  })
+                                  .toList() ??
                               [const Text('Chưa có dữ liệu')]),
                         ],
                       ),

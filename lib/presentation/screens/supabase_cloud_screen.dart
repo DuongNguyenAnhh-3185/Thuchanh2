@@ -143,19 +143,19 @@ class _SupabaseCloudScreenState extends State<SupabaseCloudScreen> {
                   message: _connectionStatus == null
                       ? 'Đang kiểm tra kết nối...'
                       : _connectionStatus!
-                          ? 'Supabase: Đã kết nối'
-                          : 'Supabase: Lỗi kết nối',
+                      ? 'Supabase: Đã kết nối'
+                      : 'Supabase: Lỗi kết nối',
                   child: Icon(
                     _connectionStatus == null
                         ? Icons.cloud_queue
                         : _connectionStatus!
-                            ? Icons.cloud_done
-                            : Icons.cloud_off,
+                        ? Icons.cloud_done
+                        : Icons.cloud_off,
                     color: _connectionStatus == null
                         ? Colors.white70
                         : _connectionStatus!
-                            ? Colors.greenAccent
-                            : Colors.redAccent,
+                        ? Colors.greenAccent
+                        : Colors.redAccent,
                   ),
                 ),
               ),
@@ -212,11 +212,7 @@ class _SupabaseCloudScreenState extends State<SupabaseCloudScreen> {
               ],
             ),
             const Divider(height: 20),
-            _infoRow(
-              'URL',
-              AppConstants.supabaseUrl,
-              Icons.link,
-            ),
+            _infoRow('URL', AppConstants.supabaseUrl, Icons.link),
             const SizedBox(height: 8),
             _infoRow(
               'Publishable Key',
@@ -307,7 +303,7 @@ class _SupabaseCloudScreenState extends State<SupabaseCloudScreen> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _selectedType,
+              initialValue: _selectedType,
               isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Phân loại tài liệu',
@@ -321,7 +317,7 @@ class _SupabaseCloudScreenState extends State<SupabaseCloudScreen> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _selectedStatus,
+              initialValue: _selectedStatus,
               isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Trạng thái học tập',
@@ -442,8 +438,11 @@ class _SupabaseCloudScreenState extends State<SupabaseCloudScreen> {
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       children: [
-                        const Icon(Icons.error_outline,
-                            color: Colors.red, size: 40),
+                        const Icon(
+                          Icons.error_outline,
+                          color: Colors.red,
+                          size: 40,
+                        ),
                         const SizedBox(height: 8),
                         Text(
                           'Lỗi kết nối Supabase:\n${snapshot.error}',
@@ -477,7 +476,7 @@ class _SupabaseCloudScreenState extends State<SupabaseCloudScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: docs.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     final doc = docs[index];
                     final id = doc['id']?.toString() ?? '';
@@ -531,8 +530,7 @@ class _SupabaseCloudScreenState extends State<SupabaseCloudScreen> {
                                       ),
                                       padding: EdgeInsets.zero,
                                       visualDensity: VisualDensity.compact,
-                                      backgroundColor:
-                                          const Color(0xFFE8F5E9),
+                                      backgroundColor: const Color(0xFFE8F5E9),
                                     ),
                                   )
                                   .toList(),
@@ -541,8 +539,10 @@ class _SupabaseCloudScreenState extends State<SupabaseCloudScreen> {
                       ),
                       isThreeLine: true,
                       trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline,
-                            color: Colors.redAccent),
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.redAccent,
+                        ),
                         tooltip: 'Xóa khỏi Supabase',
                         onPressed: () => _deleteDocument(id, title),
                       ),
@@ -557,4 +557,3 @@ class _SupabaseCloudScreenState extends State<SupabaseCloudScreen> {
     );
   }
 }
-

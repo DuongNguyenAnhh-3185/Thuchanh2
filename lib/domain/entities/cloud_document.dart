@@ -33,6 +33,11 @@ class CloudDocument {
     required this.createdAt,
     required this.updatedAt,
     required this.accessLevel,
+    this.tags = const [],
+    this.physicalLocation = '',
+    this.latitude,
+    this.longitude,
+    this.isBorrowable = false,
   });
 
   final String id;
@@ -46,6 +51,11 @@ class CloudDocument {
   final DateTime createdAt;
   final DateTime updatedAt;
   final CloudAccessLevel accessLevel;
+  final List<String> tags;
+  final String physicalLocation;
+  final double? latitude;
+  final double? longitude;
+  final bool isBorrowable;
 
   bool get canEdit =>
       accessLevel == CloudAccessLevel.owner ||
@@ -72,6 +82,56 @@ class CloudDocument {
       accessLevel: ownerId == currentUserId
           ? CloudAccessLevel.owner
           : CloudAccessLevelX.fromDatabase(grantedAccess),
+      tags: (map['tags'] as List<dynamic>? ?? const [])
+          .map((tag) => tag.toString())
+          .toList(growable: false),
+      physicalLocation: map['physical_location'] as String? ?? '',
+      latitude: (map['latitude'] as num?)?.toDouble(),
+      longitude: (map['longitude'] as num?)?.toDouble(),
+      isBorrowable: map['is_borrowable'] as bool? ?? false,
+    );
+  }
+}
+
+class CloudBorrowRequest {
+  const CloudBorrowRequest({
+    required this.id,
+    required this.documentId,
+    required this.documentTitle,
+    required this.ownerId,
+    required this.requesterId,
+    required this.requesterEmail,
+    required this.requesterName,
+    required this.message,
+    required this.status,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String documentId;
+  final String documentTitle;
+  final String ownerId;
+  final String requesterId;
+  final String requesterEmail;
+  final String requesterName;
+  final String message;
+  final String status;
+  final DateTime createdAt;
+
+  bool isIncomingFor(String userId) => ownerId == userId;
+
+  factory CloudBorrowRequest.fromMap(Map<String, dynamic> map) {
+    return CloudBorrowRequest(
+      id: map['id'] as String,
+      documentId: map['document_id'] as String,
+      documentTitle: map['document_title'] as String? ?? '',
+      ownerId: map['owner_id'] as String,
+      requesterId: map['requester_id'] as String,
+      requesterEmail: map['requester_email'] as String? ?? '',
+      requesterName: map['requester_name'] as String? ?? '',
+      message: map['message'] as String? ?? '',
+      status: map['status'] as String? ?? 'pending',
+      createdAt: DateTime.parse(map['created_at'] as String).toLocal(),
     );
   }
 }

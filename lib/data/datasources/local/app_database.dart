@@ -1,9 +1,11 @@
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:sqflite_common_ffi_web/sqflite_ffi_web.dart';
+
 import '../../../core/constants/app_constants.dart';
 
 /// Quản lý kết nối và khởi tạo cơ sở dữ liệu SQLite
@@ -20,19 +22,25 @@ class AppDatabase {
   }
 
   /// Khởi tạo database hoàn toàn trên RAM (In-Memory) cho Unit Tests mà không phụ thuộc path_provider
-  static Future<Database> createInMemoryDatabase() async {
+  static Future<Database> createInMemoryDatabase({
+    bool useIsolate = true,
+  }) async {
     sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
-    final db = await databaseFactoryFfi.openDatabase(
+    final factory = useIsolate
+        ? databaseFactoryFfi
+        : databaseFactoryFfiNoIsolate;
+    databaseFactory = factory;
+    final db = await factory.openDatabase(
       inMemoryDatabasePath,
       options: OpenDatabaseOptions(
-        version: 1,
+        version: 2,
         onConfigure: (database) async {
           await database.execute('PRAGMA foreign_keys = ON');
         },
         onCreate: (database, version) async {
           await instance._onCreate(database, version);
         },
+        onUpgrade: instance._onUpgrade,
       ),
     );
     _database = db;
@@ -51,8 +59,9 @@ class AppDatabase {
       return await databaseFactoryFfiWeb.openDatabase(
         'cashew_study.db',
         options: OpenDatabaseOptions(
-          version: 1,
+          version: 2,
           onCreate: _onCreate,
+          onUpgrade: _onUpgrade,
           onConfigure: (db) async {
             await db.execute('PRAGMA foreign_keys = ON');
           },
@@ -71,8 +80,9 @@ class AppDatabase {
 
     return await openDatabase(
       dbPath,
-      version: 1,
+      version: 2,
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
       onConfigure: (db) async {
         // Bật hỗ trợ ràng buộc khóa ngoại (Foreign Keys)
         await db.execute('PRAGMA foreign_keys = ON');
@@ -105,6 +115,9 @@ class AppDatabase {
         studyStatus TEXT NOT NULL DEFAULT 'Chưa học',
         priority INTEGER NOT NULL DEFAULT 2,
         tags TEXT DEFAULT '',
+        physicalLocation TEXT NOT NULL DEFAULT '',
+        latitude REAL,
+        longitude REAL,
         isDeleted INTEGER NOT NULL DEFAULT 0,
         dateTimeCreated INTEGER NOT NULL,
         dateTimeModified INTEGER NOT NULL,
@@ -140,6 +153,20 @@ class AppDatabase {
     await _insertInitialSeedData(db);
   }
 
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute(
+        "ALTER TABLE ${AppConstants.tableDocuments} ADD COLUMN physicalLocation TEXT NOT NULL DEFAULT ''",
+      );
+      await db.execute(
+        'ALTER TABLE ${AppConstants.tableDocuments} ADD COLUMN latitude REAL',
+      );
+      await db.execute(
+        'ALTER TABLE ${AppConstants.tableDocuments} ADD COLUMN longitude REAL',
+      );
+    }
+  }
+
   Future<void> _insertInitialSeedData(Database db) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final subjects = [
@@ -173,18 +200,31 @@ class AppDatabase {
     ];
 
     for (final s in subjects) {
-      await db.insert(AppConstants.tableSubjects, s, conflictAlgorithm: ConflictAlgorithm.replace);
+      await db.insert(
+        AppConstants.tableSubjects,
+        s,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
     }
   }
 
   /// Nạp hàng loạt tài liệu mẫu (Bài giảng, Bài tập, Tham khảo, Đề thi)
   Future<void> seedSampleDocuments({bool force = false}) async {
     final db = await database;
-    final res = await db.rawQuery('SELECT COUNT(*) as total FROM ${AppConstants.tableDocuments} WHERE isDeleted = 0');
+    final res = await db.rawQuery(
+      'SELECT COUNT(*) as total FROM ${AppConstants.tableDocuments} ',
+    );
     final count = res.isNotEmpty ? (res.first['total'] as int? ?? 0) : 0;
 
     if (count > 0 && !force) return;
 
+    final seedSubjects = await db.query(
+      AppConstants.tableSubjects,
+      columns: ['subjectPk'],
+      where: 'subjectPk IN (?, ?, ?)',
+      whereArgs: ['sub-mob-001', 'sub-arc-002', 'sub-db-003'],
+    );
+    if (seedSubjects.length != 3) return;
     final now = DateTime.now().millisecondsSinceEpoch;
     final dayMs = 24 * 60 * 60 * 1000;
 
@@ -247,7 +287,8 @@ class AppDatabase {
       {
         'documentPk': 'doc-arc-002',
         'subjectFk': 'sub-arc-002',
-        'title': 'Bài tập Lớn - Phân tích & Tái cấu trúc Hệ thống Cashew Monolith',
+        'title':
+            'Bài tập Lớn - Phân tích & Tái cấu trúc Hệ thống Cashew Monolith',
         'documentType': 'Bài tập (Assignment)',
         'note': 'Giải quyết điểm nghẽn tập tin tables.dart 7.600 dòng bằng cách bóc tách mô-đun DAOs, Repositories, Services.',
         'studyStatus': 'Đang học',
@@ -260,7 +301,8 @@ class AppDatabase {
       {
         'documentPk': 'doc-arc-003',
         'subjectFk': 'sub-arc-002',
-        'title': 'Sách tham khảo: Clean Architecture - Robert C. Martin (Uncle Bob)',
+        'title':
+            'Sách tham khảo: Clean Architecture - Robert C. Martin (Uncle Bob)',
         'documentType': 'Tài liệu tham khảo (Reference)',
         'note': 'Sách kinh điển về kiến trúc phần mềm, hướng dẫn thiết kế hệ thống decoupled, testable và maintainable.',
         'studyStatus': 'Chưa học',
@@ -301,7 +343,8 @@ class AppDatabase {
       {
         'documentPk': 'doc-db-002',
         'subjectFk': 'sub-db-003',
-        'title': 'Bài tập Lab 3 - Thiết kế CSDL Cục bộ hỗ trợ Soft-Delete & UUID v4',
+        'title':
+            'Bài tập Lab 3 - Thiết kế CSDL Cục bộ hỗ trợ Soft-Delete & UUID v4',
         'documentType': 'Bài tập (Assignment)',
         'note': 'Viết bảng DeleteLogs và trigger ghi vết xóa để đảm bảo khả năng đồng bộ đa thiết bị không mất dữ liệu.',
         'studyStatus': 'Đã hoàn thành',
@@ -327,7 +370,8 @@ class AppDatabase {
       {
         'documentPk': 'doc-db-004',
         'subjectFk': 'sub-db-003',
-        'title': 'Đề thi Thực hành SQL Cuối kỳ - Đề số 02 (Kèm Lời giải chi tiết)',
+        'title':
+            'Đề thi Thực hành SQL Cuối kỳ - Đề số 02 (Kèm Lời giải chi tiết)',
         'documentType': 'Đề thi & Đề cương (Exam)',
         'note': 'Đề thi thực hành 90 phút: Truy vấn phức hợp JOIN 4 bảng, hàm cửa sổ Window Functions, Transaction ACID.',
         'studyStatus': 'Chưa học',
@@ -354,7 +398,8 @@ class AppDatabase {
         'documentFk': 'doc-mob-001',
         'fileName': 'Slide_Chuong1_TongQuanFlutter.pptx',
         'fileExtension': 'pptx',
-        'localPath': '/storage/emulated/0/Download/Slide_Chuong1_TongQuanFlutter.pptx',
+        'localPath':
+            '/storage/emulated/0/Download/Slide_Chuong1_TongQuanFlutter.pptx',
         'fileSizeBytes': 5420000,
         'dateTimeCreated': now - 5 * dayMs,
       },
@@ -363,7 +408,8 @@ class AppDatabase {
         'documentFk': 'doc-mob-001',
         'fileName': 'Giao_Trinh_Dart_Flutter_Chuan.pdf',
         'fileExtension': 'pdf',
-        'localPath': '/storage/emulated/0/Download/Giao_Trinh_Dart_Flutter_Chuan.pdf',
+        'localPath':
+            '/storage/emulated/0/Download/Giao_Trinh_Dart_Flutter_Chuan.pdf',
         'fileSizeBytes': 12580000,
         'dateTimeCreated': now - 5 * dayMs,
       },
@@ -372,7 +418,8 @@ class AppDatabase {
         'documentFk': 'doc-mob-002',
         'fileName': 'De_Bai_Thuc_Hanh_1_CashewDoc.pdf',
         'fileExtension': 'pdf',
-        'localPath': '/storage/emulated/0/Download/De_Bai_Thuc_Hanh_1_CashewDoc.pdf',
+        'localPath':
+            '/storage/emulated/0/Download/De_Bai_Thuc_Hanh_1_CashewDoc.pdf',
         'fileSizeBytes': 1850000,
         'dateTimeCreated': now - 3 * dayMs,
       },

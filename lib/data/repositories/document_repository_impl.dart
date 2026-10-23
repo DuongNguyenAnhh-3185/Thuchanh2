@@ -12,19 +12,21 @@ class DocumentRepositoryImpl implements IDocumentRepository {
   final DocumentDao _documentDao;
   final DeleteLogDao _deleteLogDao;
 
-  DocumentRepositoryImpl({
-    DocumentDao? documentDao,
-    DeleteLogDao? deleteLogDao,
-  })  : _documentDao = documentDao ?? DocumentDao(),
-        _deleteLogDao = deleteLogDao ?? DeleteLogDao();
+  DocumentRepositoryImpl({DocumentDao? documentDao, DeleteLogDao? deleteLogDao})
+    : _documentDao = documentDao ?? DocumentDao(),
+      _deleteLogDao = deleteLogDao ?? DeleteLogDao();
 
   @override
-  Future<List<DocumentEntity>> getAllDocuments({bool includeDeleted = false}) async {
+  Future<List<DocumentEntity>> getAllDocuments({
+    bool includeDeleted = false,
+  }) async {
     return await _documentDao.getAllDocuments(includeDeleted: includeDeleted);
   }
 
   @override
-  Stream<List<DocumentEntity>> watchAllDocuments({bool includeDeleted = false}) {
+  Stream<List<DocumentEntity>> watchAllDocuments({
+    bool includeDeleted = false,
+  }) {
     return _documentDao.watchAllDocuments(includeDeleted: includeDeleted);
   }
 

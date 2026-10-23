@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/constants/app_constants.dart';
@@ -14,7 +15,6 @@ import 'document_form_screen.dart';
 import 'subject_list_screen.dart';
 import 'trash_screen.dart';
 import 'firebase_cloud_screen.dart';
-import 'supabase_cloud_screen.dart';
 
 /// Màn hình chính của ứng dụng Quản lý Tài liệu Học tập (CashewDoc)
 class HomeScreen extends StatelessWidget {
@@ -82,7 +82,7 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
       2 => const SubjectListScreen(),
       3 => const TrashScreen(),
       4 => const FirebaseCloudScreen(),
-      _ => const SupabaseCloudScreen(),
+      _ => const FirebaseCloudScreen(),
     };
 
     setState(() => _selectedDestination = index);
@@ -91,6 +91,16 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
 
     setState(() => _selectedDestination = 0);
     if (index == 3) _controller.refreshFilteredList();
+  }
+
+  Future<void> _signOut() async {
+    if (Firebase.apps.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Firebase chưa được khởi tạo.')),
+      );
+      return;
+    }
+    await AuthService.instance.signOut();
   }
 
   void _confirmDelete(DocumentEntity doc) {
@@ -158,7 +168,7 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
               IconButton(
                 tooltip: 'Đăng xuất',
                 icon: const Icon(Icons.logout, color: Colors.white),
-                onPressed: AuthService.instance.signOut,
+                onPressed: _signOut,
               ),
               PopupMenuButton<String>(
                 icon: const Icon(Icons.more_vert, color: Colors.white),
@@ -176,13 +186,6 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
                       context,
                       MaterialPageRoute(
                         builder: (_) => const FirebaseCloudScreen(),
-                      ),
-                    );
-                  } else if (val == 'supabase') {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const SupabaseCloudScreen(),
                       ),
                     );
                   } else if (val == 'trash') {
@@ -263,20 +266,6 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
                       ],
                     ),
                   ),
-                  const PopupMenuItem(
-                    value: 'supabase',
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.storage,
-                          size: 20,
-                          color: Color(0xFF1A9F5A),
-                        ),
-                        SizedBox(width: 10),
-                        Text('Supabase Cloud'),
-                      ],
-                    ),
-                  ),
                   const PopupMenuDivider(),
                   const PopupMenuItem(
                     value: 'sort_date_desc',
@@ -337,11 +326,6 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
                           icon: Icon(Icons.cloud_outlined),
                           selectedIcon: Icon(Icons.cloud),
                           label: Text('Firebase'),
-                        ),
-                        NavigationRailDestination(
-                          icon: Icon(Icons.storage_outlined),
-                          selectedIcon: Icon(Icons.storage),
-                          label: Text('Supabase'),
                         ),
                       ],
                     ),
@@ -505,6 +489,70 @@ class _HomeScreenContentState extends State<_HomeScreenContent> {
                                         ),
                                       );
                                     }),
+                                  ],
+                                ),
+                              ),
+
+                            if (_controller.recommendations.isNotEmpty)
+                              SizedBox(
+                                height: 126,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Padding(
+                                      padding: EdgeInsets.fromLTRB(
+                                        16,
+                                        4,
+                                        16,
+                                        6,
+                                      ),
+                                      child: Text(
+                                        'Gợi ý cho bạn',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: ListView(
+                                        scrollDirection: Axis.horizontal,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                        ),
+                                        children: _controller.recommendations
+                                            .map(
+                                              (document) => SizedBox(
+                                                width: 230,
+                                                child: Card(
+                                                  child: ListTile(
+                                                    leading: const Icon(
+                                                      Icons.auto_awesome,
+                                                      color: AppConstants
+                                                          .primaryColor,
+                                                    ),
+                                                    title: Text(
+                                                      document.title,
+                                                      maxLines: 2,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                    subtitle: Text(
+                                                      document.tags,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                    ),
+                                                    onTap: () =>
+                                                        _openDocumentDetail(
+                                                          document,
+                                                        ),
+                                                  ),
+                                                ),
+                                              ),
+                                            )
+                                            .toList(),
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
