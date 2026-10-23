@@ -1,10 +1,15 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 /// Hằng số toàn cục cho hệ thống Quản lý Tài liệu Học tập (CashewDoc)
 /// Áp dụng bảng màu và chuẩn thiết kế theo phong cách Cashew
 class AppConstants {
+  static const String supabaseUrl = 'https://oemlhoqptgrgtwaozmgu.supabase.co';
+  static const String supabasePublishableKey =
+      'sb_publishable_oo6cgZImDTT2zmc9SSZ-VQ_CzMkTGMW';
+
   static const String appName = 'CashewDoc';
-  static const String appSubtitle = 'Quản lý Tài liệu Học tập Chuẩn Kiến trúc Cashew';
+  static const String appSubtitle =
+      'Quản lý Tài liệu Học tập Chuẩn Kiến trúc Cashew';
   static const String appVersion = '1.0.0';
 
   // Tên các bảng CSDL SQLite
