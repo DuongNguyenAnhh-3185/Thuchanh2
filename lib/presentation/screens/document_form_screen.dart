@@ -24,6 +24,11 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
   late final TextEditingController _titleController;
   late final TextEditingController _noteController;
   late final TextEditingController _tagsController;
+  late final TextEditingController _roomController;
+  late final TextEditingController _shelfController;
+  late final TextEditingController _boxController;
+  late final TextEditingController _latController;
+  late final TextEditingController _lngController;
 
   String? _selectedSubjectFk;
   String _selectedType = AppConstants.documentTypes.first;
@@ -40,6 +45,11 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
     _titleController = TextEditingController(text: doc?.title ?? '');
     _noteController = TextEditingController(text: doc?.note ?? '');
     _tagsController = TextEditingController(text: doc?.tags ?? '');
+    _roomController = TextEditingController(text: 'Phòng A1');
+    _shelfController = TextEditingController(text: 'Kệ B2');
+    _boxController = TextEditingController(text: 'Hộp 01');
+    _latController = TextEditingController(text: '21.0285');
+    _lngController = TextEditingController(text: '105.8542');
     _selectedSubjectFk = doc?.subjectFk;
     if (doc != null) {
       _selectedType = doc.documentType;
@@ -66,6 +76,11 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
     _titleController.dispose();
     _noteController.dispose();
     _tagsController.dispose();
+    _roomController.dispose();
+    _shelfController.dispose();
+    _boxController.dispose();
+    _latController.dispose();
+    _lngController.dispose();
     super.dispose();
   }
 
@@ -143,7 +158,7 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: selectedExt,
+                initialValue: selectedExt,
                 decoration: const InputDecoration(
                   labelText: 'Định dạng tệp',
                   border: OutlineInputBorder(),
@@ -275,12 +290,24 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
     }
 
     try {
+      final room = _roomController.text.trim();
+      final shelf = _shelfController.text.trim();
+      final box = _boxController.text.trim();
+      final lat = _latController.text.trim().isNotEmpty ? _latController.text.trim() : '21.0285';
+      final lng = _lngController.text.trim().isNotEmpty ? _lngController.text.trim() : '105.8542';
+
+      var noteText = _noteController.text.trim();
+      final locMarker = '📍 Vị trí: $room - $shelf - $box (GPS: $lat, $lng)';
+      if (!noteText.contains('📍 Vị trí:')) {
+        noteText = noteText.isEmpty ? locMarker : '$noteText\n$locMarker';
+      }
+
       await ServiceLocator.instance.documentService.saveDocument(
         documentPk: widget.initialDocument?.documentPk,
         subjectFk: _selectedSubjectFk!,
         title: _titleController.text.trim(),
         documentType: _selectedType,
-        note: _noteController.text.trim(),
+        note: noteText,
         studyStatus: _selectedStatus,
         priority: _priority,
         tags: _tagsController.text.trim(),
@@ -346,7 +373,7 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
                     // Chọn môn học
                     DropdownButtonFormField<String>(
                       isExpanded: true,
-                      value: _selectedSubjectFk,
+                      initialValue: _selectedSubjectFk,
                       decoration: const InputDecoration(
                         labelText: 'Môn học *',
                         border: OutlineInputBorder(),
@@ -368,7 +395,7 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
                     // Loại tài liệu
                     DropdownButtonFormField<String>(
                       isExpanded: true,
-                      value: _selectedType,
+                      initialValue: _selectedType,
                       decoration: const InputDecoration(
                         labelText: 'Phân loại tài liệu',
                         border: OutlineInputBorder(),
@@ -387,7 +414,7 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
                     // Trạng thái học tập
                     DropdownButtonFormField<String>(
                       isExpanded: true,
-                      value: _selectedStatus,
+                      initialValue: _selectedStatus,
                       decoration: const InputDecoration(
                         labelText: 'Trạng thái học tập',
                         border: OutlineInputBorder(),
@@ -428,6 +455,134 @@ class _DocumentFormScreenState extends State<DocumentFormScreen> {
                           padding: EdgeInsets.only(bottom: 60),
                           child: Icon(Icons.notes),
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // ==========================================
+                    // KHỐI VỊ TRÍ VẬT LÝ & TỌA ĐỘ BẢN ĐỒ GPS
+                    // ==========================================
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.indigo.shade50.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.indigo.shade100),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.location_on, color: Colors.indigo, size: 20),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                  'Vị trí lưu kho vật lý & Tọa độ Bản đồ',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: Colors.indigo,
+                                  ),
+                                ),
+                              ),
+                              TextButton.icon(
+                                onPressed: () {
+                                  setState(() {
+                                    _roomController.text = 'Phòng A1';
+                                    _shelfController.text = 'Kệ B2';
+                                    _boxController.text = 'Hộp 01';
+                                    _latController.text = '21.0285';
+                                    _lngController.text = '105.8542';
+                                  });
+                                },
+                                icon: const Icon(Icons.gps_fixed, size: 14),
+                                label: const Text('Mặc định HN', style: TextStyle(fontSize: 11)),
+                                style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _roomController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Phòng lưu trữ',
+                                    hintText: 'VD: Phòng A1',
+                                    border: OutlineInputBorder(),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    prefixIcon: Icon(Icons.meeting_room_outlined),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _shelfController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Mã kệ',
+                                    hintText: 'VD: Kệ B2',
+                                    border: OutlineInputBorder(),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    prefixIcon: Icon(Icons.shelves),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _boxController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Số hộp',
+                                    hintText: 'VD: Hộp 01',
+                                    border: OutlineInputBorder(),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    prefixIcon: Icon(Icons.all_inbox_outlined),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _latController,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Vĩ độ (Lat)',
+                                    hintText: '21.0285',
+                                    border: OutlineInputBorder(),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    prefixIcon: Icon(Icons.explore_outlined),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: TextFormField(
+                                  controller: _lngController,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Kinh độ (Lng)',
+                                    hintText: '105.8542',
+                                    border: OutlineInputBorder(),
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    prefixIcon: Icon(Icons.explore_outlined),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 20),

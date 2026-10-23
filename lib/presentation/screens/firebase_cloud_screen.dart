@@ -8,6 +8,11 @@ import '../../domain/entities/cloud_document.dart';
 import '../../services/auth_service.dart';
 import '../../services/cloud_workspace_service.dart';
 import '../../services/supabase_service.dart';
+import '../../widgets/borrow_request_dialog.dart';
+import '../../widgets/document_location_dialog.dart';
+import '../../widgets/documents_map_overview_widget.dart';
+import '../../widgets/manage_requests_screen.dart';
+import '../../widgets/recommended_documents_widget.dart';
 
 /// Không gian tài liệu đa nền tảng: Firebase Auth/Storage + Supabase/RLS.
 class FirebaseCloudScreen extends StatefulWidget {
@@ -30,6 +35,7 @@ class _FirebaseCloudScreenState extends State<FirebaseCloudScreen> {
   bool _busy = false;
   bool _signingIn = false;
   int _loadGeneration = 0;
+  int _selectedTabIndex = 0; // 0: Tất cả, 1: Gợi ý cho bạn, 2: Yêu cầu mượn, 3: Bản đồ vị trí
 
   @override
   void initState() {
@@ -144,9 +150,15 @@ class _FirebaseCloudScreenState extends State<FirebaseCloudScreen> {
           file: request.file,
           title: request.title,
           description: request.description,
+          storageRoom: request.storageRoom,
+          shelfCode: request.shelfCode,
+          boxNumber: request.boxNumber,
+          address: request.address,
+          latitude: request.latitude,
+          longitude: request.longitude,
         );
       },
-      successMessage: 'Đã tải tệp lên Firebase và lưu metadata trên Supabase.',
+      successMessage: 'Đã tải tệp lên Firebase và lưu vị trí lưu trữ trên Supabase.',
     );
   }
 
@@ -161,9 +173,101 @@ class _FirebaseCloudScreenState extends State<FirebaseCloudScreen> {
         documentId: document.id,
         title: result.title,
         description: result.description,
+        storageRoom: result.storageRoom,
+        shelfCode: result.shelfCode,
+        boxNumber: result.boxNumber,
+        address: result.address,
+        latitude: result.latitude,
+        longitude: result.longitude,
       ),
-      successMessage: 'Đã cập nhật thông tin tài liệu.',
+      successMessage: 'Đã cập nhật thông tin và vị trí tài liệu.',
     );
+  }
+
+  void _openLocationDialog(CloudDocument doc) {
+    DocumentLocationDialog.show(
+      context,
+      document: doc,
+      onSaveLocation: ({
+        required String storageRoom,
+        required String shelfCode,
+        required String boxNumber,
+        required String address,
+        required double latitude,
+        required double longitude,
+      }) async {
+        await _service.updateDocument(
+          documentId: doc.id,
+          title: doc.title,
+          description: doc.description,
+          storageRoom: storageRoom,
+          shelfCode: shelfCode,
+          boxNumber: boxNumber,
+          address: address,
+          latitude: latitude,
+          longitude: longitude,
+        );
+        await _loadDocuments();
+      },
+      onBorrow: () => BorrowRequestDialog.show(
+        context,
+        documentId: doc.id,
+        documentTitle: doc.title,
+        ownerId: doc.ownerId,
+        storageRoom: doc.storageRoom,
+        shelfCode: doc.shelfCode,
+        boxNumber: doc.boxNumber,
+        address: doc.address,
+      ),
+    );
+  }
+
+  Future<void> _assignDefaultLocations() async {
+    final withoutCoords = _documents.where((d) =>
+        d.latitude == null ||
+        d.longitude == null ||
+        d.latitude == 0.0 ||
+        d.longitude == 0.0).toList();
+
+    if (withoutCoords.isEmpty) {
+      _showMessage('Tất cả tài liệu đã có tọa độ ghim trên bản đồ.');
+      return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      int idx = 0;
+      for (final doc in withoutCoords) {
+        // Tọa độ Hà Nội với độ lệch nhỏ để các marker hiển thị tách biệt đẹp mắt
+        final offset = (idx % 6) * 0.0035;
+        final lat = 21.0285 + ((idx % 2 == 0 ? 1 : -1) * offset);
+        final lng = 105.8542 + ((idx % 3 == 0 ? 1 : -1) * offset);
+        final room = doc.storageRoom?.isNotEmpty == true ? doc.storageRoom! : 'Phòng P.${101 + idx}';
+        final shelf = doc.shelfCode?.isNotEmpty == true ? doc.shelfCode! : 'Kệ K.${(idx % 5) + 1}';
+        final box = doc.boxNumber?.isNotEmpty == true ? doc.boxNumber! : 'Hộp ${(idx % 10) + 1}';
+
+        await _service.updateDocument(
+          documentId: doc.id,
+          title: doc.title,
+          description: doc.description,
+          storageRoom: room,
+          shelfCode: shelf,
+          boxNumber: box,
+          address: doc.address?.isNotEmpty == true ? doc.address : 'Thư viện Trung tâm Hà Nội',
+          latitude: lat,
+          longitude: lng,
+        );
+        idx++;
+      }
+      await _loadDocuments();
+      if (mounted) {
+        _showMessage('Đã gán tọa độ và vị trí kho lưu trữ mẫu cho ${withoutCoords.length} tài liệu thành công!');
+      }
+    } catch (e) {
+      if (mounted) _showMessage('Lỗi gán tọa độ mẫu: $e', isError: true);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _download(CloudDocument document) async {
@@ -205,9 +309,8 @@ class _FirebaseCloudScreenState extends State<FirebaseCloudScreen> {
       ..showSnackBar(
         SnackBar(
           content: Text(message),
-          backgroundColor: isError
-              ? Colors.red.shade700
-              : Colors.green.shade700,
+          backgroundColor:
+              isError ? Colors.red.shade700 : Colors.green.shade700,
         ),
       );
   }
@@ -224,6 +327,15 @@ class _FirebaseCloudScreenState extends State<FirebaseCloudScreen> {
             onPressed: () => Navigator.pushReplacementNamed(context, '/local'),
             icon: const Icon(Icons.storage_outlined),
           ),
+          if (user != null)
+            IconButton(
+              tooltip: 'Duyệt yêu cầu mượn tài liệu',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ManageRequestsScreen()),
+              ),
+              icon: const Icon(Icons.mark_email_unread_outlined),
+            ),
           if (user != null)
             IconButton(
               tooltip: 'Làm mới',
@@ -255,8 +367,8 @@ class _FirebaseCloudScreenState extends State<FirebaseCloudScreen> {
                 child: user == null
                     ? _buildSignedOut()
                     : !SupabaseService.isInitialized
-                    ? _buildConfigurationRequired(user)
-                    : _buildWorkspace(user),
+                        ? _buildConfigurationRequired(user)
+                        : _buildWorkspace(user),
               ),
             ),
           ),
@@ -361,6 +473,86 @@ class _FirebaseCloudScreenState extends State<FirebaseCloudScreen> {
       children: [
         _UserCard(user: user),
         const SizedBox(height: 12),
+        _buildTabBar(),
+        const SizedBox(height: 12),
+        Expanded(
+          child: switch (_selectedTabIndex) {
+            1 => const RecommendedDocumentsWidget(),
+            2 => const ManageRequestsScreen(isEmbedded: true),
+            3 => DocumentsMapOverviewWidget(
+                documents: _documents,
+                onViewDocument: (doc) => _openLocationDialog(doc),
+                onEditLocation: (doc) => _openLocationDialog(doc),
+                onBorrowDocument: (doc) => BorrowRequestDialog.show(
+                  context,
+                  documentId: doc.id,
+                  documentTitle: doc.title,
+                  ownerId: doc.ownerId,
+                  storageRoom: doc.storageRoom,
+                  shelfCode: doc.shelfCode,
+                  boxNumber: doc.boxNumber,
+                  address: doc.address,
+                ),
+                onAssignDefaultLocations: _assignDefaultLocations,
+              ),
+            _ => _buildAllDocumentsTab(),
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTabBar() {
+    final mappedCount = _documents
+        .where((d) =>
+            d.latitude != null &&
+            d.longitude != null &&
+            d.latitude != 0.0 &&
+            d.longitude != 0.0)
+        .length;
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: SegmentedButton<int>(
+        style: ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          padding: WidgetStateProperty.all(
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          ),
+        ),
+        segments: [
+          ButtonSegment<int>(
+            value: 0,
+            icon: const Icon(Icons.folder_open_outlined),
+            label: Text('Tất cả (${_documents.length})'),
+          ),
+          const ButtonSegment<int>(
+            value: 1,
+            icon: Icon(Icons.auto_awesome_outlined),
+            label: Text('Gợi ý cho bạn'),
+          ),
+          const ButtonSegment<int>(
+            value: 2,
+            icon: Icon(Icons.swap_horiz_outlined),
+            label: Text('Yêu cầu mượn'),
+          ),
+          ButtonSegment<int>(
+            value: 3,
+            icon: const Icon(Icons.map_outlined),
+            label: Text('Bản đồ vị trí ($mappedCount)'),
+          ),
+        ],
+        selected: {_selectedTabIndex},
+        onSelectionChanged: (newSelection) {
+          setState(() => _selectedTabIndex = newSelection.first);
+        },
+      ),
+    );
+  }
+
+  Widget _buildAllDocumentsTab() {
+    return Column(
+      children: [
         TextField(
           controller: _searchController,
           onChanged: _onSearchChanged,
@@ -400,32 +592,47 @@ class _FirebaseCloudScreenState extends State<FirebaseCloudScreen> {
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : _documents.isEmpty
-              ? const _EmptyDocuments()
-              : RefreshIndicator(
-                  onRefresh: _bootstrapCloud,
-                  child: ListView.separated(
-                    padding: const EdgeInsets.only(bottom: 88),
-                    itemCount: _documents.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (_, index) => _DocumentTile(
-                      document: _documents[index],
-                      disabled: _busy,
-                      onDownload: () => _download(_documents[index]),
-                      onEdit: () => _showEditDialog(_documents[index]),
-                      onShare: () => showDialog<void>(
-                        context: context,
-                        builder: (_) => _ShareDocumentDialog(
+                  ? const _EmptyDocuments()
+                  : RefreshIndicator(
+                      onRefresh: _bootstrapCloud,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.only(bottom: 88),
+                        itemCount: _documents.length,
+                        separatorBuilder: (_, index) =>
+                            const SizedBox(height: 8),
+                        itemBuilder: (_, index) => _DocumentTile(
                           document: _documents[index],
-                          service: _service,
+                          disabled: _busy,
+                          onDownload: () => _download(_documents[index]),
+                          onEdit: () => _showEditDialog(_documents[index]),
+                          onShare: () => showDialog<void>(
+                            context: context,
+                            builder: (_) => _ShareDocumentDialog(
+                              document: _documents[index],
+                              service: _service,
+                            ),
+                          ),
+                          onViewLocation: () =>
+                              _openLocationDialog(_documents[index]),
+                          onBorrow: () => BorrowRequestDialog.show(
+                            context,
+                            documentId: _documents[index].id,
+                            documentTitle: _documents[index].title,
+                            ownerId: _documents[index].ownerId,
+                            storageRoom: _documents[index].storageRoom,
+                            shelfCode: _documents[index].shelfCode,
+                            boxNumber: _documents[index].boxNumber,
+                            address: _documents[index].address,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
         ),
       ],
     );
   }
+
+
 
   static String _messageOf(Object error) {
     if (error is CloudOperationException) return error.message;
@@ -445,9 +652,8 @@ class _UserCard extends StatelessWidget {
     return Card(
       child: ListTile(
         leading: CircleAvatar(
-          backgroundImage: user.photoURL == null
-              ? null
-              : NetworkImage(user.photoURL!),
+          backgroundImage:
+              user.photoURL == null ? null : NetworkImage(user.photoURL!),
           child: user.photoURL == null
               ? Text((user.displayName ?? user.email ?? 'U')[0].toUpperCase())
               : null,
@@ -494,6 +700,8 @@ class _DocumentTile extends StatelessWidget {
     required this.onDownload,
     required this.onEdit,
     required this.onShare,
+    this.onViewLocation,
+    this.onBorrow,
   });
 
   final CloudDocument document;
@@ -501,6 +709,8 @@ class _DocumentTile extends StatelessWidget {
   final VoidCallback onDownload;
   final VoidCallback onEdit;
   final VoidCallback onShare;
+  final VoidCallback? onViewLocation;
+  final VoidCallback? onBorrow;
 
   @override
   Widget build(BuildContext context) {
@@ -553,6 +763,93 @@ class _DocumentTile extends StatelessWidget {
                         text: document.accessLevel.label,
                         color: color,
                       ),
+                      if (document.storageRoom != null && document.storageRoom!.isNotEmpty)
+                        _InfoChip(
+                          icon: Icons.inventory_2_outlined,
+                          text: document.storageRoom!,
+                          color: Colors.indigo,
+                        ),
+                      if (document.tags.isNotEmpty)
+                        ...document.tags.take(3).map(
+                          (t) => _InfoChip(
+                            icon: Icons.tag,
+                            text: t,
+                            color: Colors.amber,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  // Dòng badge vị trí vật lý của tài liệu
+                  Builder(
+                    builder: (context) {
+                      final hasRoom = document.storageRoom?.isNotEmpty == true;
+                      final hasShelf = document.shelfCode?.isNotEmpty == true;
+                      final hasBox = document.boxNumber?.isNotEmpty == true;
+                      final String locText;
+                      if (hasRoom || hasShelf) {
+                        final parts = <String>[];
+                        if (hasRoom) parts.add(document.storageRoom!);
+                        if (hasShelf) parts.add(document.shelfCode!);
+                        if (hasBox) parts.add('Hộp ${document.boxNumber}');
+                        locText = '📍 ${parts.join(" - ")}';
+                      } else {
+                        locText = '📍 Chưa cấu hình vị trí lưu kho';
+                      }
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: (hasRoom || hasShelf) ? const Color(0xFFEEF2FF) : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: (hasRoom || hasShelf) ? const Color(0xFFC7D2FE) : Colors.grey.shade300,
+                          ),
+                        ),
+                        child: Text(
+                          locText,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: (hasRoom || hasShelf) ? Colors.indigo.shade900 : Colors.grey.shade700,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      OutlinedButton.icon(
+                        icon: const Icon(Icons.map_outlined, size: 16),
+                        label: const Text('Xem bản đồ / Định vị'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.indigo.shade800,
+                          side: BorderSide(color: Colors.indigo.shade300),
+                          backgroundColor: Colors.indigo.shade50.withValues(alpha: 0.6),
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        ),
+                        onPressed: onViewLocation,
+                      ),
+                      if (!document.isOwner)
+                        FilledButton.tonalIcon(
+                          icon: const Icon(Icons.local_library_outlined, size: 16, color: Colors.green),
+                          label: const Text(
+                            'Gửi yêu cầu mượn',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.green),
+                          ),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFFF0FDF4),
+                            side: const BorderSide(color: Color(0xFFBBF7D0)),
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          ),
+                          onPressed: onBorrow,
+                        ),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -569,6 +866,8 @@ class _DocumentTile extends StatelessWidget {
                 if (value == 'download') onDownload();
                 if (value == 'edit') onEdit();
                 if (value == 'share') onShare();
+                if (value == 'location') onViewLocation?.call();
+                if (value == 'borrow') onBorrow?.call();
               },
               itemBuilder: (_) => [
                 const PopupMenuItem(
@@ -579,6 +878,23 @@ class _DocumentTile extends StatelessWidget {
                     contentPadding: EdgeInsets.zero,
                   ),
                 ),
+                const PopupMenuItem(
+                  value: 'location',
+                  child: ListTile(
+                    leading: Icon(Icons.location_on_outlined, color: Colors.indigo),
+                    title: Text('Vị trí & Bản đồ'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+                if (!document.isOwner)
+                  const PopupMenuItem(
+                    value: 'borrow',
+                    child: ListTile(
+                      leading: Icon(Icons.local_library_outlined, color: Colors.green),
+                      title: Text('Đăng ký mượn tài liệu'),
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
                 if (document.canEdit)
                   const PopupMenuItem(
                     value: 'edit',
@@ -637,10 +953,27 @@ class _InfoChip extends StatelessWidget {
 }
 
 class _UploadRequest {
-  const _UploadRequest(this.file, this.title, this.description);
+  const _UploadRequest({
+    required this.file,
+    required this.title,
+    required this.description,
+    this.storageRoom,
+    this.shelfCode,
+    this.boxNumber,
+    this.address,
+    this.latitude,
+    this.longitude,
+  });
+
   final PlatformFile file;
   final String title;
   final String description;
+  final String? storageRoom;
+  final String? shelfCode;
+  final String? boxNumber;
+  final String? address;
+  final double? latitude;
+  final double? longitude;
 }
 
 class _UploadDocumentDialog extends StatefulWidget {
@@ -653,6 +986,13 @@ class _UploadDocumentDialog extends StatefulWidget {
 class _UploadDocumentDialogState extends State<_UploadDocumentDialog> {
   final _title = TextEditingController();
   final _description = TextEditingController();
+  final _storageRoom = TextEditingController(text: 'Phòng A1');
+  final _shelfCode = TextEditingController(text: 'Kệ B2');
+  final _boxNumber = TextEditingController(text: 'Hộp 01');
+  final _address = TextEditingController(text: 'Thư viện Trung tâm Hà Nội');
+  final _latitude = TextEditingController(text: '21.0285');
+  final _longitude = TextEditingController(text: '105.8542');
+
   PlatformFile? _file;
   String? _error;
 
@@ -660,16 +1000,35 @@ class _UploadDocumentDialogState extends State<_UploadDocumentDialog> {
   void dispose() {
     _title.dispose();
     _description.dispose();
+    _storageRoom.dispose();
+    _shelfCode.dispose();
+    _boxNumber.dispose();
+    _address.dispose();
+    _latitude.dispose();
+    _longitude.dispose();
     super.dispose();
+  }
+
+  void _setDefaultHanoi() {
+    setState(() {
+      _storageRoom.text = 'Phòng A1';
+      _shelfCode.text = 'Kệ B2';
+      _boxNumber.text = 'Hộp 01';
+      _address.text = 'Thư viện Trung tâm Hà Nội';
+      _latitude.text = '21.0285';
+      _longitude.text = '105.8542';
+    });
   }
 
   Future<void> _pickFile() async {
     try {
-      final result = await FilePicker.platform.pickFiles(type: FileType.any);
-      final file = result?.files.singleOrNull;
-      if (file == null || !mounted) return;
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty || !mounted) return;
+      final file = result.files.single;
       final size = file.size;
-      if (!mounted) return;
       setState(() {
         _file = file;
         _error = size > CloudWorkspaceService.maxFileSizeBytes
@@ -691,50 +1050,220 @@ class _UploadDocumentDialogState extends State<_UploadDocumentDialog> {
       setState(() => _error = 'Vui lòng chọn tệp và nhập tiêu đề.');
       return;
     }
+
+    // Nếu người dùng không nhập tọa độ, mặc định gán Hà Nội: 21.0285, 105.8542
+    final lat = double.tryParse(_latitude.text.trim()) ?? 21.0285;
+    final lng = double.tryParse(_longitude.text.trim()) ?? 105.8542;
+
     Navigator.pop(
       context,
-      _UploadRequest(_file!, _title.text.trim(), _description.text.trim()),
+      _UploadRequest(
+        file: _file!,
+        title: _title.text.trim(),
+        description: _description.text.trim(),
+        storageRoom: _storageRoom.text.trim().isNotEmpty ? _storageRoom.text.trim() : 'Phòng A1',
+        shelfCode: _shelfCode.text.trim().isNotEmpty ? _shelfCode.text.trim() : 'Kệ B2',
+        boxNumber: _boxNumber.text.trim().isNotEmpty ? _boxNumber.text.trim() : 'Hộp 01',
+        address: _address.text.trim().isNotEmpty ? _address.text.trim() : 'Thư viện Trung tâm Hà Nội',
+        latitude: lat,
+        longitude: lng,
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Tải tài liệu mới'),
+      title: const Row(
+        children: [
+          Icon(Icons.cloud_upload_outlined, color: Colors.indigo),
+          SizedBox(width: 8),
+          Text('Tải tài liệu & Định vị lưu trữ'),
+        ],
+      ),
       content: SizedBox(
-        width: 520,
+        width: 560,
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TextField(
                 controller: _title,
                 autofocus: true,
                 maxLength: 200,
                 decoration: const InputDecoration(
-                  labelText: 'Tiêu đề *',
+                  labelText: 'Tiêu đề tài liệu *',
                   border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.title),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               TextField(
                 controller: _description,
-                maxLines: 3,
+                maxLines: 2,
                 maxLength: 4000,
                 decoration: const InputDecoration(
-                  labelText: 'Mô tả',
+                  labelText: 'Mô tả nội dung',
                   border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.description_outlined),
                 ),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: _pickFile,
                 icon: const Icon(Icons.attach_file),
-                label: Text(_file?.name ?? 'Chọn tệp (tối đa 25 MB)'),
+                label: Text(_file?.name ?? 'Chọn tệp từ máy (tối đa 25 MB)'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
               ),
+              const SizedBox(height: 16),
+
+              // Khối Thông tin vị trí vật lý
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.indigo.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.indigo.shade100),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on, size: 18, color: Colors.indigo),
+                        const SizedBox(width: 6),
+                        const Expanded(
+                          child: Text(
+                            'Vị trí lưu kho & Tọa độ Bản đồ GPS',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.indigo,
+                            ),
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: _setDefaultHanoi,
+                          icon: const Icon(Icons.gps_fixed, size: 14),
+                          label: const Text('Gán mặc định HN', style: TextStyle(fontSize: 11)),
+                          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _storageRoom,
+                            decoration: const InputDecoration(
+                              labelText: 'Phòng lưu trữ',
+                              hintText: 'VD: Phòng A1',
+                              prefixIcon: Icon(Icons.meeting_room_outlined, size: 18),
+                              border: OutlineInputBorder(),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _shelfCode,
+                            decoration: const InputDecoration(
+                              labelText: 'Mã kệ',
+                              hintText: 'VD: Kệ B2',
+                              prefixIcon: Icon(Icons.shelves, size: 18),
+                              border: OutlineInputBorder(),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _boxNumber,
+                            decoration: const InputDecoration(
+                              labelText: 'Số hộp',
+                              hintText: 'VD: Hộp 01',
+                              prefixIcon: Icon(Icons.all_inbox_outlined, size: 18),
+                              border: OutlineInputBorder(),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _address,
+                            decoration: const InputDecoration(
+                              labelText: 'Địa chỉ / Cơ sở',
+                              hintText: 'VD: Thư viện ĐH',
+                              prefixIcon: Icon(Icons.place_outlined, size: 18),
+                              border: OutlineInputBorder(),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _latitude,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Vĩ độ (Latitude)',
+                              hintText: '21.0285',
+                              prefixIcon: Icon(Icons.explore_outlined, size: 18),
+                              border: OutlineInputBorder(),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _longitude,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Kinh độ (Longitude)',
+                              hintText: '105.8542',
+                              prefixIcon: Icon(Icons.explore_outlined, size: 18),
+                              border: OutlineInputBorder(),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
               if (_error != null) ...[
-                const SizedBox(height: 8),
-                Text(_error!, style: const TextStyle(color: Colors.red)),
+                const SizedBox(height: 10),
+                Text(_error!, style: const TextStyle(color: Colors.red, fontSize: 13)),
               ],
             ],
           ),
@@ -745,16 +1274,36 @@ class _UploadDocumentDialogState extends State<_UploadDocumentDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Hủy'),
         ),
-        FilledButton(onPressed: _submit, child: const Text('Tải lên')),
+        FilledButton.icon(
+          onPressed: _submit,
+          icon: const Icon(Icons.cloud_upload_outlined, size: 18),
+          label: const Text('Tải lên & Lưu vị trí'),
+        ),
       ],
     );
   }
 }
 
 class _EditRequest {
-  const _EditRequest(this.title, this.description);
+  const _EditRequest({
+    required this.title,
+    required this.description,
+    this.storageRoom,
+    this.shelfCode,
+    this.boxNumber,
+    this.address,
+    this.latitude,
+    this.longitude,
+  });
+
   final String title;
   final String description;
+  final String? storageRoom;
+  final String? shelfCode;
+  final String? boxNumber;
+  final String? address;
+  final double? latitude;
+  final double? longitude;
 }
 
 class _EditDocumentDialog extends StatefulWidget {
@@ -768,49 +1317,257 @@ class _EditDocumentDialog extends StatefulWidget {
 class _EditDocumentDialogState extends State<_EditDocumentDialog> {
   late final TextEditingController _title;
   late final TextEditingController _description;
+  late final TextEditingController _storageRoom;
+  late final TextEditingController _shelfCode;
+  late final TextEditingController _boxNumber;
+  late final TextEditingController _address;
+  late final TextEditingController _latitude;
+  late final TextEditingController _longitude;
 
   @override
   void initState() {
     super.initState();
-    _title = TextEditingController(text: widget.document.title);
-    _description = TextEditingController(text: widget.document.description);
+    final doc = widget.document;
+    _title = TextEditingController(text: doc.title);
+    _description = TextEditingController(text: doc.description);
+    _storageRoom = TextEditingController(text: doc.storageRoom ?? 'Phòng A1');
+    _shelfCode = TextEditingController(text: doc.shelfCode ?? 'Kệ B2');
+    _boxNumber = TextEditingController(text: doc.boxNumber ?? 'Hộp 01');
+    _address = TextEditingController(
+      text: doc.address?.isNotEmpty == true ? doc.address! : 'Thư viện Trung tâm Hà Nội',
+    );
+    _latitude = TextEditingController(
+      text: (doc.latitude != null && doc.latitude != 0.0)
+          ? doc.latitude!.toStringAsFixed(6)
+          : '21.0285',
+    );
+    _longitude = TextEditingController(
+      text: (doc.longitude != null && doc.longitude != 0.0)
+          ? doc.longitude!.toStringAsFixed(6)
+          : '105.8542',
+    );
   }
 
   @override
   void dispose() {
     _title.dispose();
     _description.dispose();
+    _storageRoom.dispose();
+    _shelfCode.dispose();
+    _boxNumber.dispose();
+    _address.dispose();
+    _latitude.dispose();
+    _longitude.dispose();
     super.dispose();
+  }
+
+  void _setDefaultHanoi() {
+    setState(() {
+      _storageRoom.text = 'Phòng A1';
+      _shelfCode.text = 'Kệ B2';
+      _boxNumber.text = 'Hộp 01';
+      _address.text = 'Thư viện Trung tâm Hà Nội';
+      _latitude.text = '21.0285';
+      _longitude.text = '105.8542';
+    });
+  }
+
+  void _submit() {
+    if (_title.text.trim().isEmpty) return;
+
+    final lat = double.tryParse(_latitude.text.trim()) ?? 21.0285;
+    final lng = double.tryParse(_longitude.text.trim()) ?? 105.8542;
+
+    Navigator.pop(
+      context,
+      _EditRequest(
+        title: _title.text.trim(),
+        description: _description.text.trim(),
+        storageRoom: _storageRoom.text.trim(),
+        shelfCode: _shelfCode.text.trim(),
+        boxNumber: _boxNumber.text.trim(),
+        address: _address.text.trim(),
+        latitude: lat,
+        longitude: lng,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Cập nhật tài liệu'),
+      title: const Row(
+        children: [
+          Icon(Icons.edit_location_alt_outlined, color: Colors.indigo),
+          SizedBox(width: 8),
+          Text('Cập nhật tài liệu & Vị trí kho'),
+        ],
+      ),
       content: SizedBox(
-        width: 500,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _title,
-              maxLength: 200,
-              decoration: const InputDecoration(
-                labelText: 'Tiêu đề *',
-                border: OutlineInputBorder(),
+        width: 540,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _title,
+                maxLength: 200,
+                decoration: const InputDecoration(
+                  labelText: 'Tiêu đề *',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.title),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _description,
-              maxLines: 3,
-              maxLength: 4000,
-              decoration: const InputDecoration(
-                labelText: 'Mô tả',
-                border: OutlineInputBorder(),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _description,
+                maxLines: 2,
+                maxLength: 4000,
+                decoration: const InputDecoration(
+                  labelText: 'Mô tả',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.description_outlined),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+
+              // Khối Vị trí lưu kho
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.indigo.shade50,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.indigo.shade100),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on, size: 18, color: Colors.indigo),
+                        const SizedBox(width: 6),
+                        const Expanded(
+                          child: Text(
+                            'Vị trí lưu kho & Tọa độ GPS',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.indigo,
+                            ),
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: _setDefaultHanoi,
+                          icon: const Icon(Icons.gps_fixed, size: 14),
+                          label: const Text('Mặc định HN', style: TextStyle(fontSize: 11)),
+                          style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _storageRoom,
+                            decoration: const InputDecoration(
+                              labelText: 'Phòng lưu trữ',
+                              prefixIcon: Icon(Icons.meeting_room_outlined, size: 18),
+                              border: OutlineInputBorder(),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _shelfCode,
+                            decoration: const InputDecoration(
+                              labelText: 'Mã kệ',
+                              prefixIcon: Icon(Icons.shelves, size: 18),
+                              border: OutlineInputBorder(),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _boxNumber,
+                            decoration: const InputDecoration(
+                              labelText: 'Số hộp',
+                              prefixIcon: Icon(Icons.all_inbox_outlined, size: 18),
+                              border: OutlineInputBorder(),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _address,
+                            decoration: const InputDecoration(
+                              labelText: 'Địa chỉ / Cơ sở',
+                              prefixIcon: Icon(Icons.place_outlined, size: 18),
+                              border: OutlineInputBorder(),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _latitude,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Vĩ độ (Latitude)',
+                              prefixIcon: Icon(Icons.explore_outlined, size: 18),
+                              border: OutlineInputBorder(),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _longitude,
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                            decoration: const InputDecoration(
+                              labelText: 'Kinh độ (Longitude)',
+                              prefixIcon: Icon(Icons.explore_outlined, size: 18),
+                              border: OutlineInputBorder(),
+                              filled: true,
+                              fillColor: Colors.white,
+                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
@@ -818,15 +1575,10 @@ class _EditDocumentDialogState extends State<_EditDocumentDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Hủy'),
         ),
-        FilledButton(
-          onPressed: () {
-            if (_title.text.trim().isEmpty) return;
-            Navigator.pop(
-              context,
-              _EditRequest(_title.text.trim(), _description.text.trim()),
-            );
-          },
-          child: const Text('Lưu'),
+        FilledButton.icon(
+          onPressed: _submit,
+          icon: const Icon(Icons.save_outlined, size: 18),
+          label: const Text('Lưu thay đổi'),
         ),
       ],
     );
@@ -940,7 +1692,7 @@ class _ShareDocumentDialogState extends State<_ShareDocumentDialog> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<CloudAccessLevel>(
-                value: _level,
+                initialValue: _level,
                 decoration: const InputDecoration(
                   labelText: 'Quyền truy cập',
                   border: OutlineInputBorder(),
@@ -955,9 +1707,8 @@ class _ShareDocumentDialogState extends State<_ShareDocumentDialog> {
                     child: Text('Xem và sửa thông tin'),
                   ),
                 ],
-                onChanged: _saving
-                    ? null
-                    : (value) => setState(() => _level = value!),
+                onChanged:
+                    _saving ? null : (value) => setState(() => _level = value!),
               ),
               const SizedBox(height: 12),
               FilledButton.icon(

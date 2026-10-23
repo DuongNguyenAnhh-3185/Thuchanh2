@@ -214,7 +214,7 @@ void main() {
 
   group('NHÓM 1: KIỂM THỬ TÍNH ĐỘC LẬP TẦNG MIỀN (DOMAIN LAYER ISOLATION)', () {
     test('TC-ISO-01: DocumentEntity tính bất biến và copyWith hoạt động hoàn hảo', () {
-      final doc = DocumentEntity(
+      const doc = DocumentEntity(
         documentPk: 'doc-uuid-1',
         subjectFk: 'sub-uuid-1',
         title: 'Tài liệu Gốc',
@@ -249,7 +249,7 @@ void main() {
     });
 
     test('TC-ISO-02: SubjectEntity cấu hình màu sắc HEX và icon độc lập', () {
-      final subject = SubjectEntity(
+      const subject = SubjectEntity(
         subjectPk: 'sub-001',
         code: 'MOB101',
         name: 'Lập trình Di động 1',
@@ -266,7 +266,7 @@ void main() {
     });
 
     test('TC-ISO-03: AttachmentEntity lưu trữ đầy đủ thuộc tính tệp và khóa ngoại', () {
-      final att = AttachmentEntity(
+      const att = AttachmentEntity(
         attachmentPk: 'att-001',
         documentFk: 'doc-001',
         fileName: 'Bai_giang_Clean_Arch.pdf',
@@ -521,7 +521,7 @@ void main() {
 
   group('NHÓM 3: KIỂM THỬ TẦNG DỮ LIỆU & ÁNH XẠ (DATA LAYER MAPPING & SERIALIZATION)', () {
     test('TC-ISO-14: DocumentModel chuyển đổi 2 chiều Entity <-> Model bảo toàn 100% dữ liệu', () {
-      final originalEntity = DocumentEntity(
+      const originalEntity = DocumentEntity(
         documentPk: 'doc-map-001',
         subjectFk: 'sub-map-001',
         title: 'Kiểm tra Mapping 2 chiều',
@@ -566,7 +566,7 @@ void main() {
 
     test('TC-ISO-15: SubjectModel, AttachmentModel và DeleteLogModel ánh xạ đúng định dạng CSDL', () {
       // Test SubjectModel
-      final subEntity = SubjectEntity(
+      const subEntity = SubjectEntity(
         subjectPk: 'sub-007',
         code: 'INT310',
         name: 'Mạng Máy Tính',
@@ -581,7 +581,7 @@ void main() {
       expect(SubjectModel.fromMap(subMap).toEntity().name, equals('Mạng Máy Tính'));
 
       // Test AttachmentModel
-      final attEntity = AttachmentEntity(
+      const attEntity = AttachmentEntity(
         attachmentPk: 'att-999',
         documentFk: 'doc-map-001',
         fileName: 'tailieu.pdf',
@@ -596,7 +596,7 @@ void main() {
       expect(AttachmentModel.fromMap(attMap).toEntity().fileName, equals('tailieu.pdf'));
 
       // Test DeleteLogModel
-      final logModel = DeleteLogModel(
+      const logModel = DeleteLogModel(
         logPk: 'log-001',
         entityPk: 'doc-map-001',
         entityType: 'Document',

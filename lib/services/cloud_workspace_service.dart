@@ -112,6 +112,13 @@ class CloudWorkspaceService {
     required PlatformFile file,
     required String title,
     String description = '',
+    String? storageRoom,
+    String? shelfCode,
+    String? boxNumber,
+    String? address,
+    double? latitude,
+    double? longitude,
+    List<String>? tags,
   }) async {
     final user = _user;
     final normalizedTitle = title.trim();
@@ -162,7 +169,7 @@ class CloudWorkspaceService {
         ),
       );
 
-      final inserted = await _supabase
+    final inserted = await _supabase
           .from('documents')
           .insert({
             'id': documentId,
@@ -173,6 +180,17 @@ class CloudWorkspaceService {
             'storage_path': storagePath,
             'file_size_bytes': fileSize,
             'mime_type': mimeType,
+            if (storageRoom != null && storageRoom.trim().isNotEmpty)
+              'storage_room': storageRoom.trim(),
+            if (shelfCode != null && shelfCode.trim().isNotEmpty)
+              'shelf_code': shelfCode.trim(),
+            if (boxNumber != null && boxNumber.trim().isNotEmpty)
+              'box_number': boxNumber.trim(),
+            if (address != null && address.trim().isNotEmpty)
+              'address': address.trim(),
+            if (latitude != null) 'latitude': latitude,
+            if (longitude != null) 'longitude': longitude,
+            if (tags != null && tags.isNotEmpty) 'tags': tags,
           })
           .select()
           .single();
@@ -204,6 +222,13 @@ class CloudWorkspaceService {
     required String documentId,
     required String title,
     required String description,
+    String? storageRoom,
+    String? shelfCode,
+    String? boxNumber,
+    String? address,
+    double? latitude,
+    double? longitude,
+    List<String>? tags,
   }) async {
     final normalizedTitle = title.trim();
     if (normalizedTitle.isEmpty) {
@@ -213,10 +238,93 @@ class CloudWorkspaceService {
     }
     await _supabase
         .from('documents')
-        .update({'title': normalizedTitle, 'description': description.trim()})
+        .update({
+          'title': normalizedTitle,
+          'description': description.trim(),
+          if (storageRoom != null)
+            'storage_room': storageRoom.trim().isEmpty ? null : storageRoom.trim(),
+          if (shelfCode != null)
+            'shelf_code': shelfCode.trim().isEmpty ? null : shelfCode.trim(),
+          if (boxNumber != null)
+            'box_number': boxNumber.trim().isEmpty ? null : boxNumber.trim(),
+          if (address != null)
+            'address': address.trim().isEmpty ? null : address.trim(),
+          if (latitude != null) 'latitude': latitude,
+          if (longitude != null) 'longitude': longitude,
+          if (tags != null) 'tags': tags,
+        })
         .eq('id', documentId)
         .select('id')
         .single();
+  }
+
+  // --- LUỒNG MƯỢN TÀI LIỆU (BORROW REQUESTS) ---
+  Future<void> createBorrowRequest({
+    required String documentId,
+    required DateTime borrowDate,
+    required DateTime dueDate,
+    String? ownerId,
+    String? notes,
+  }) async {
+    final user = _user;
+    String? resolvedOwnerId = ownerId;
+    if (resolvedOwnerId == null || resolvedOwnerId.trim().isEmpty) {
+      final doc = await _supabase
+          .from('documents')
+          .select('owner_id')
+          .eq('id', documentId)
+          .maybeSingle();
+      if (doc != null && doc['owner_id'] != null) {
+        resolvedOwnerId = doc['owner_id'] as String;
+      }
+    }
+
+    await _supabase.from('borrow_requests').insert({
+      'document_id': documentId,
+      if (resolvedOwnerId != null) 'owner_id': resolvedOwnerId,
+      'requester_id': user.uid,
+      'requester_uid': user.uid,
+      'borrow_date': borrowDate.toIso8601String(),
+      'due_date': dueDate.toIso8601String(),
+      'notes': (notes == null || notes.trim().isEmpty) ? null : notes.trim(),
+      'status': 'pending',
+    });
+  }
+
+  Future<List<BorrowRequestEntity>> getBorrowRequests() async {
+    try {
+      final response = await _supabase
+          .from('borrow_requests')
+          .select('*, documents(id, title, shelf_code, storage_room), users(id, email, display_name)')
+          .order('created_at', ascending: false);
+      return _asRows(response).map(BorrowRequestEntity.fromMap).toList();
+    } catch (_) {
+      final response = await _supabase
+          .from('borrow_requests')
+          .select()
+          .order('created_at', ascending: false);
+      return _asRows(response).map(BorrowRequestEntity.fromMap).toList();
+    }
+  }
+
+  Future<void> updateBorrowRequestStatus(String requestId, String status) async {
+    await _supabase
+        .from('borrow_requests')
+        .update({'status': status})
+        .eq('id', requestId);
+  }
+
+  // --- THUẬT TOÁN GỢI Ý (RECOMMENDATION) ---
+  Future<List<RecommendedDocumentEntity>> getRecommendations({int limit = 6}) async {
+    final user = _user;
+    final response = await _supabase.rpc(
+      'get_recommended_documents',
+      params: {
+        'target_user_id': user.uid,
+        'limit_count': limit,
+      },
+    );
+    return _asRows(response).map(RecommendedDocumentEntity.fromMap).toList();
   }
 
   Future<bool> downloadDocument(CloudDocument document) async {

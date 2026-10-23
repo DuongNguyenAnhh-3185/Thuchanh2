@@ -186,7 +186,7 @@ class AppDatabase {
     if (count > 0 && !force) return;
 
     final now = DateTime.now().millisecondsSinceEpoch;
-    final dayMs = 24 * 60 * 60 * 1000;
+    const dayMs = 24 * 60 * 60 * 1000;
 
     final sampleDocs = [
       // --- MÔN MOB101: Phát triển Ứng dụng Di động ---

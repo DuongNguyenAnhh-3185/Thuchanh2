@@ -121,9 +121,9 @@ class _SubjectListScreenState extends State<SubjectListScreen> {
                   ),
                   color: Colors.white,
                   child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: const Color(0xFFDBEAFE),
-                      child: const Icon(Icons.school, color: AppConstants.primaryColor),
+                    leading: const CircleAvatar(
+                      backgroundColor: Color(0xFFDBEAFE),
+                      child: Icon(Icons.school, color: AppConstants.primaryColor),
                     ),
                     title: Text(
                       '${sub.code} - ${sub.name}',

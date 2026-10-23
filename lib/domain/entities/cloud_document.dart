@@ -121,3 +121,105 @@ class DocumentPermission {
     );
   }
 }
+
+class BorrowRequestEntity {
+  const BorrowRequestEntity({
+    required this.id,
+    required this.documentId,
+    required this.requesterId,
+    required this.status,
+    required this.borrowDate,
+    required this.dueDate,
+    this.notes,
+    required this.createdAt,
+    this.documentTitle,
+    this.requesterEmail,
+    this.requesterName,
+  });
+
+  final String id;
+  final String documentId;
+  final String requesterId;
+  final String status;
+  final DateTime borrowDate;
+  final DateTime dueDate;
+  final String? notes;
+  final DateTime createdAt;
+  final String? documentTitle;
+  final String? requesterEmail;
+  final String? requesterName;
+
+  String get statusLabel => switch (status) {
+    'pending' => 'Chờ duyệt',
+    'approved' => 'Đã duyệt',
+    'rejected' => 'Từ chối',
+    'returned' => 'Đã trả',
+    _ => status,
+  };
+
+  factory BorrowRequestEntity.fromMap(Map<String, dynamic> map) {
+    final doc = map['documents'] as Map<String, dynamic>?;
+    final user = map['users'] as Map<String, dynamic>?;
+    return BorrowRequestEntity(
+      id: map['id'] as String,
+      documentId: map['document_id'] as String,
+      requesterId: map['requester_id'] as String,
+      status: map['status'] as String? ?? 'pending',
+      borrowDate: DateTime.tryParse(map['borrow_date'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+      dueDate: DateTime.tryParse(map['due_date'] as String? ?? '')?.toLocal() ?? DateTime.now().add(const Duration(days: 7)),
+      notes: map['notes'] as String?,
+      createdAt: DateTime.tryParse(map['created_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+      documentTitle: doc?['title'] as String?,
+      requesterEmail: user?['email'] as String?,
+      requesterName: user?['display_name'] as String?,
+    );
+  }
+}
+
+class RecommendedDocumentEntity {
+  const RecommendedDocumentEntity({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.fileName,
+    required this.tags,
+    this.storageRoom,
+    this.shelfCode,
+    this.boxNumber,
+    this.address,
+    required this.matchedTags,
+    required this.similarityScore,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String title;
+  final String description;
+  final String fileName;
+  final List<String> tags;
+  final String? storageRoom;
+  final String? shelfCode;
+  final String? boxNumber;
+  final String? address;
+  final List<String> matchedTags;
+  final double similarityScore;
+  final DateTime createdAt;
+
+  factory RecommendedDocumentEntity.fromMap(Map<String, dynamic> map) {
+    return RecommendedDocumentEntity(
+      id: map['id'] as String,
+      title: map['title'] as String? ?? '',
+      description: map['description'] as String? ?? '',
+      fileName: map['file_name'] as String? ?? '',
+      tags: (map['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
+      storageRoom: map['storage_room'] as String?,
+      shelfCode: map['shelf_code'] as String?,
+      boxNumber: map['box_number'] as String?,
+      address: map['address'] as String?,
+      matchedTags: (map['matched_tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
+      similarityScore: (map['similarity_score'] as num?)?.toDouble() ?? 0.0,
+      createdAt: DateTime.tryParse(map['created_at'] as String? ?? '')?.toLocal() ?? DateTime.now(),
+    );
+  }
+}
+

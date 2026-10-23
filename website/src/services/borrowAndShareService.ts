@@ -29,6 +29,7 @@ export async function createBorrowRequest(params: {
   documentId: string;
   borrowDate: string;
   dueDate: string;
+  ownerId?: string;
   notes?: string;
 }): Promise<{ data: BorrowRequest | null; error: Error | null }> {
   try {
@@ -36,11 +37,25 @@ export async function createBorrowRequest(params: {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) throw new Error('Vui lòng đăng nhập để mượn tài liệu.');
 
+    let ownerId = params.ownerId;
+    if (!ownerId) {
+      const { data: doc } = await supabase
+        .from('documents')
+        .select('owner_id')
+        .eq('id', params.documentId)
+        .maybeSingle();
+      if (doc?.owner_id) {
+        ownerId = doc.owner_id;
+      }
+    }
+
     const { data, error } = await supabase
       .from('borrow_requests')
       .insert({
         document_id: params.documentId,
+        owner_id: ownerId,
         requester_id: user.id,
+        requester_uid: user.id,
         borrow_date: params.borrowDate,
         due_date: params.dueDate,
         notes: params.notes || null,
